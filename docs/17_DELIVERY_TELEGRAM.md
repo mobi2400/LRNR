@@ -8,16 +8,40 @@
 
 | Property | Value |
 |----------|-------|
-| Primary purpose | Deliver LRNR sessions and digests through Telegram with low friction and high clarity |
+| Primary purpose | Notify the owner, send alerts, deliver lightweight digests, and deep-link back to the LRNR frontend |
 | Main files to create | `src/lib/telegram.ts`, `src/types/telegram.types.ts`, `src/nodes/delivery.node.ts` |
 | Delivery library | `telegraf` |
-| Main flows | onboarding conversation, daily lesson delivery, evaluation conversation, news digest delivery |
+| Main flows | study reminders, lesson-ready alerts, evaluation reminders, digest notifications, system alerts |
+
+---
+
+## Updated Role
+
+Telegram is no longer the primary learning surface.
+
+The LRNR web frontend is the main study experience because it can show:
+
+- diagrams
+- code blocks
+- answer boxes
+- curriculum maps
+- source links
+- progress views
+- Graph RAG explanations later
+
+Telegram remains valuable as a notification and alert channel.
+
+Its job is to bring the owner back to the frontend at the right moment.
+
+```text
+Telegram = notify, alert, remind, deep-link
+Frontend = study, answer, review, explore
+Backend = authenticate, retrieve, reason, persist
+```
 
 ---
 
 ## What This System Does
-
-Telegram is the first delivery surface for LRNR.
 
 Its job is to make the system feel:
 
@@ -27,14 +51,17 @@ Its job is to make the system feel:
 - low-friction
 - human
 
-Telegram delivery is not just "send text." It is responsible for:
+Telegram delivery is not full lesson rendering anymore. It is responsible for:
 
-- formatting lessons cleanly
-- sequencing multiple messages correctly
+- sending concise reminders
+- sending lesson-ready alerts
+- sending evaluation-due alerts
+- sending news digest summaries
+- sending system failure or recovery alerts
+- including safe links back to the frontend
 - respecting Telegram limits
-- weaving Layer 3 items into the experience
-- handling conversation replies for Architect and Evaluation
-- delivering news digests without becoming noisy
+- avoiding duplicate notifications
+- avoiding notification fatigue
 
 ---
 
@@ -47,55 +74,82 @@ That means:
 - messages must be broken into digestible chunks
 - each message should have one clear purpose
 - formatting should aid learning, not look decorative
-- the user should know where they are in the journey
+- the owner should know why they are being notified
 - the system should avoid overwhelming the user with too many items at once
+- most messages should include a link back to the exact frontend page
 
 ---
 
 ## Main Delivery Modes
 
-### 1. Architect conversation
+### 1. Study reminder
 
-Multi-turn onboarding and re-evaluation conversation.
-
-Characteristics:
-
-- interactive
-- one question at a time
-- waits for user response
-- must persist conversation state safely
-
-### 2. Teaching session
-
-5-7 sequential messages that form the daily lesson.
+Daily reminder that a learning session is ready.
 
 Characteristics:
 
-- structured
-- phase-aware
-- grounded in real examples
-- can include Layer 3 injection
+- short
+- calm
+- includes current topic/session
+- links to the lesson page
 
-### 3. Evaluation conversation
+Example:
 
-Multi-turn detective-style questioning.
+```text
+Your LRNR session is ready.
+
+Topic: RAG and Context Engineering
+Today: Hybrid retrieval
+
+Open lesson: {frontend_url}/lesson/current
+```
+
+### 2. Evaluation reminder
+
+Reminder that evaluation is due.
 
 Characteristics:
 
-- interactive
-- response-driven
-- should feel like a thoughtful conversation, not an exam
+- direct
+- not scary
+- explains why evaluation matters
+- links to evaluation page
 
-### 4. News digest delivery
+### 3. News digest notification
 
-Curated AI news items, ranked and formatted compactly.
+Compact digest notification.
 
 Characteristics:
 
 - concise
 - relevance-aware
 - not overly long
-- may route some items into Layer 3 rather than only the digest
+- links to full digest page
+- may include 1-3 headlines only
+
+### 4. System alert
+
+Operational notification for the owner.
+
+Examples:
+
+- daily learning workflow failed
+- Telegram send failed
+- queue item dead-lettered
+- evaluation write failed
+- source fetch failed repeatedly
+- auth anomaly detected
+
+### 5. Optional quick reply
+
+Telegram may support simple quick replies later, but the frontend remains the main interaction surface.
+
+Examples:
+
+- remind me later
+- mark notification read
+- open today's lesson
+- pause reminders today
 
 ---
 
@@ -108,13 +162,57 @@ Recommended responsibilities:
 ```ts
 sendTelegramMessage(userId, text, options?)
 sendTelegramMessages(userId, messages, options?)
-waitForUserResponse(userId, correlationId, timeoutMs?)
-sendTypingIndicator(userId)
 safeSendMarkdown(userId, text)
 splitTelegramMessage(text, maxLength?)
+sendLessonReadyAlert(userId, session)
+sendEvaluationDueAlert(userId, evaluation)
+sendDigestAlert(userId, digestSummary)
+sendSystemAlert(alert)
 ```
 
 The rest of the codebase should not use raw Telegraf calls directly unless the wrapper intentionally exposes them.
+
+---
+
+## Notification Rules
+
+Telegram notifications should be:
+
+- short
+- actionable
+- owner-only
+- idempotent
+- linked to the frontend
+- rate limited
+- respectful of quiet hours if configured
+
+Every notification should answer:
+
+```text
+Why am I getting this?
+What should I do now?
+Where do I click?
+```
+
+---
+
+## Deep Link Rules
+
+Most Telegram messages should include a frontend link.
+
+Examples:
+
+```text
+{APP_URL}/lesson/current
+{APP_URL}/evaluation/current
+{APP_URL}/digest/today
+{APP_URL}/curriculum
+{APP_URL}/alerts
+```
+
+The backend must still authenticate and assert owner access when the link opens.
+
+Telegram links do not replace auth.
 
 ---
 

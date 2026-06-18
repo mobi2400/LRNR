@@ -5,6 +5,27 @@
 
 ---
 
+## Current Implementation Override
+
+Research Graph is Phase 3, not Phase 1.
+
+Current product direction:
+
+```text
+Frontend is the primary surface for source explorer and news digest.
+Telegram sends short alerts/deep links only.
+```
+
+When this file says News Intelligence "delivers to Telegram," implement it as:
+
+- write `news_items`
+- update digest state
+- optionally queue Telegram digest alert/deep link
+
+Nightly reconciliation should remain a separate controlled workflow as described in `docs/29_PHASE_3_LIVE_INTELLIGENCE_FLOW.md`.
+
+---
+
 ## Graph Identity
 
 | Property | Value |

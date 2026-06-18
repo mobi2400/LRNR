@@ -17,6 +17,74 @@
 
 ---
 
+## Reference-Informed Upgrade
+
+This design intentionally incorporates production RAG lessons from advanced RAG patterns:
+
+- trust engineering over demo-driven retrieval
+- ingestion quality before embedding quality
+- hash-based deduplication and version tracking
+- semantic and hierarchical chunking instead of blind fixed-size chunks
+- metadata filtering before vector search
+- hybrid lexical plus semantic retrieval
+- reciprocal rank fusion for dense and sparse result merging
+- reranking before prompt assembly
+- confidence gating so the system can say "I do not know"
+- permission-aware retrieval inside the retrieval layer
+- citation verification before final answer delivery
+- query rewriting for ambiguous or underspecified questions
+- query routing based on intent and agent need
+- different retrieval chunks and synthesis chunks
+- context-window expansion around precise hits
+- lost-in-the-middle aware context ordering
+- RAG evaluation using faithfulness, relevance, latency, and retrieval quality
+- learner-history memory for repeated questions and lower latency
+
+Primary reference:
+
+```text
+https://mallahyari.github.io/rag-ebook/04_advanced_rag.html
+```
+
+Additional project reference:
+
+```text
+https://medium.com/@mobasshirkhan9931/why-your-rag-pipeline-will-break-fffa93c827d8
+```
+
+If a reference conflicts with LRNR's learner-memory goal, LRNR's product context wins. We are not building generic document QA. We are building retrieval for teaching, evaluation, adaptation, and learner continuity.
+
+---
+
+## Trust Engineering Principle
+
+The core production question is not:
+
+```text
+Can LRNR return an answer?
+```
+
+The real question is:
+
+```text
+Can LRNR prove the answer from allowed, fresh, relevant evidence?
+```
+
+This changes the whole RAG design.
+
+Every retrieval path should produce:
+
+- scoped evidence
+- provenance
+- confidence signals
+- freshness signals
+- permission checks
+- enough trace data to debug failures
+
+If the system cannot produce reliable evidence, it should refuse, ask a clarifying question, or escalate to a safer path instead of generating a fluent guess.
+
+---
+
 ## What This System Is
 
 The RAG layer is the system's **retrieval memory**, not the total source of truth for the product.
@@ -180,6 +248,55 @@ Do not re-embed unchanged rows casually.
 
 ---
 
+## Ingestion and Index Quality
+
+RAG quality starts before embedding.
+
+Nothing should enter an index until it passes ingestion controls.
+
+For learner-memory events:
+
+- validate event type
+- normalize canonical content
+- attach topic/concept metadata
+- attach source agent
+- deduplicate retries
+- preserve idempotency key
+- store embedding version
+
+For future document/source ingestion:
+
+- normalize file format
+- extract clean text
+- deduplicate by content hash
+- preserve source URI
+- preserve document version
+- enrich metadata before embedding
+- split by semantic boundaries
+- keep parent-child relationships between chunks
+- track effective dates when available
+- mark obsolete or superseded content
+
+Required ingestion fields for source-backed content:
+
+```text
+source_id
+source_uri
+source_type
+document_hash
+document_version
+parent_document_id
+chunk_hash
+chunk_ordinal
+effective_at
+superseded_by_id
+metadata_quality_score
+```
+
+Bad ingestion creates hallucination fuel. Clean ingestion is the first hallucination defense.
+
+---
+
 ## Chunking Strategy
 
 ### Primary chunking rule
@@ -189,6 +306,55 @@ The default chunk is **one learning event per row**.
 This is the most important design choice in the whole file.
 
 Do not think in terms of article chunks. Think in terms of learner-memory events.
+
+### Retrieval chunk vs synthesis chunk
+
+The row used for retrieval does not always need to be the exact text passed to the LLM.
+
+LRNR should support two representations:
+
+```text
+retrieval_text:
+  compact, normalized, metadata-rich text used for embedding and search
+
+synthesis_text:
+  clean, human-readable evidence used in the final prompt context
+```
+
+Example:
+
+```text
+retrieval_text:
+Event Type: misconception_detected
+Topic: rag
+Concept: chunking
+Learner Issue: thinks larger chunks are always better
+Evidence: ignored precision, recall, latency, and lost-in-the-middle tradeoffs
+
+synthesis_text:
+The learner previously assumed larger chunks always improve RAG. When teaching chunking, explicitly contrast context richness with retrieval precision, latency, and middle-position attention loss.
+```
+
+Why:
+
+- retrieval text should be optimized for matching
+- synthesis text should be optimized for explanation
+- some events need compact embeddings but richer prompt evidence
+- noisy raw text should not pollute embeddings
+
+### Context window expansion
+
+For normal learner events, one row is enough.
+
+For long source-backed content later, LRNR should support a sentence or paragraph window:
+
+```text
+retrieve precise hit
+expand to nearby source context
+pass expanded context to synthesis
+```
+
+Use this only for `topic_knowledge_base`, source claims, article excerpts, or handbook-like content. Do not apply it blindly to learner memory rows, because learner events are already summary-shaped.
 
 ### Event chunk sizes by source
 
@@ -308,8 +474,253 @@ Only add later if real use justifies it:
 - `importanceScore`
 - `embeddingVersion`
 - `expiresAt`
+- `retrievalText`
+- `synthesisText`
+- `sourceId`
+- `sourceUri`
+- `parentDocumentId`
+- `chunkOrdinal`
+- `tokenCount`
+- `retrievalPolicy`
+- `freshnessAt`
+- `stalenessReason`
+- `lexicalSearchText`
+- `lastEvaluatedAt`
+- `qualityScore`
 
 ---
+
+## Retrieval Controller
+
+Do not let every agent invent retrieval differently.
+
+Create one retrieval controller that receives:
+
+```ts
+interface RAGRetrievalRequest {
+  userId: string;
+  topicId?: string;
+  conceptIds?: string[];
+  agent:
+    | 'architect'
+    | 'curriculum_builder'
+    | 'teaching'
+    | 'evaluation'
+    | 'contradiction'
+    | 'news_intelligence';
+  intent:
+    | 'teach'
+    | 'evaluate'
+    | 'diagnose_gap'
+    | 'resolve_contradiction'
+    | 'summarize_history'
+    | 'connect_news'
+    | 'answer_repeated_question';
+  query?: string;
+  filters?: RAGFilters;
+  limit?: number;
+}
+```
+
+The controller decides:
+
+- whether semantic search is needed
+- whether lexical search is needed
+- whether query rewriting is allowed
+- whether to use learner-history cache
+- whether to include unresolved memories only
+- whether to retrieve summaries first, then detailed rows
+- how to order the final context pack
+
+This keeps RAG behavior consistent, testable, and observable.
+
+---
+
+## Retrieval Modes
+
+LRNR should support multiple retrieval modes. The mode is selected by the retrieval controller, not by random agent code.
+
+| Mode | Use when | Method |
+|------|----------|--------|
+| Metadata-first | Agent knows topic, concept, event type, or unresolved state | SQL filters first, optional vector search second |
+| Semantic memory | Query wording is fuzzy or conceptual | pgvector similarity inside scoped candidates |
+| Lexical memory | Exact terms, acronyms, package names, error names, or quotes matter | Postgres full-text search or trigram search |
+| Hybrid memory | Both meaning and exact wording matter | lexical + vector, merge with reciprocal rank fusion |
+| Hierarchical memory | Need broad session/history first, then specific events | summary rows first, then linked event rows |
+| Repeated-question memory | Similar question was answered before | query-answer memory lookup before full RAG |
+| Graph-enhanced memory | Prerequisites or concept relationships matter | relational graph traversal + filtered RAG |
+
+---
+
+## Permission-Aware Retrieval
+
+Access control must live inside retrieval, not only around the UI.
+
+Every retrieval query must include:
+
+```text
+user_id
+tenant_id when available
+allowed_roles or allowed_scopes when available
+topic/concept filters when available
+```
+
+Forbidden:
+
+- retrieving first and filtering permissions after
+- trusting the frontend to hide unauthorized results
+- letting vector search cross user or tenant boundaries
+- returning source citations the user is not allowed to inspect
+
+Required retrieval order:
+
+```text
+1. authorize user
+2. build permission filters
+3. apply permission filters inside SQL/vector/BM25 query
+4. retrieve candidates
+5. rerank candidates
+6. assemble context pack
+```
+
+This protects the product from AI-shaped data leaks.
+
+### Hybrid retrieval rule
+
+Hybrid retrieval should be the default for production-grade question answering, but not for every internal agent call.
+
+Use hybrid retrieval when:
+
+- user asks a direct question
+- exact terms may matter
+- source names, libraries, versions, or acronyms are involved
+- semantic-only retrieval produces vague results
+
+Avoid hybrid retrieval when:
+
+- deterministic filters already answer the need
+- the agent only needs unresolved misconceptions
+- the query is a narrow database lookup
+
+Recommended merge:
+
+```text
+1. run metadata filters
+2. retrieve lexical candidates
+3. retrieve vector candidates
+4. deduplicate by row id
+5. merge using reciprocal rank fusion
+6. boost by confidence, freshness, and unresolved status
+7. cap final context
+```
+
+Why reciprocal rank fusion:
+
+- it combines dense and sparse retrieval without fragile score-weight tuning
+- it handles exact-term and semantic matches together
+- it is simple enough to test and explain
+- it improves reliability without requiring a larger LLM
+
+### Reranking rule
+
+Retrieval should usually fetch more candidates than the prompt will use.
+
+Recommended production pattern:
+
+```text
+hybrid retrieval fetches top 20-30 candidates
+cross-encoder reranker scores query-document pairs
+confidence gate checks the best evidence
+context pack keeps top 5-10 items
+LLM sees curated evidence only
+```
+
+Reranking is especially important when:
+
+- the corpus is large
+- ANN search is approximate
+- many candidates are semantically similar
+- exact wording and true relevance differ
+- only a few evidence items can fit in the prompt
+
+Do not rerank the whole database. Rerank only the candidate pool.
+
+### Confidence gate rule
+
+The system must be able to say:
+
+```text
+I do not have enough reliable evidence to answer that.
+```
+
+Confidence gate inputs:
+
+- top reranker score
+- score gap between first and second result
+- source freshness
+- permission validity
+- contradiction status
+- retrieval coverage
+- agent risk level
+
+Example policy:
+
+```text
+if top_score < threshold:
+  refuse or ask clarifying question
+
+if evidence is stale:
+  warn or refresh retrieval
+
+if sources conflict:
+  route to Contradiction Agent
+```
+
+The threshold should be stricter for high-risk answers and looser for low-risk personalization hints.
+
+### Query rewriting rule
+
+Query rewriting is allowed only before retrieval, never after final evidence is selected.
+
+Allowed rewrites:
+
+- expand synonyms
+- clarify vague user wording
+- generate two or three sub-queries for complex requests
+- map user language to known concepts
+- infer safe metadata filters from the query
+
+Forbidden rewrites:
+
+- adding facts not implied by the user query
+- rewriting a query so strongly that the original intent changes
+- hiding uncertainty about inferred filters
+
+Every rewritten query should be logged with:
+
+```text
+original_query
+rewritten_queries
+inferred_filters
+rewrite_reason
+```
+
+### Query routing rule
+
+The router should classify each request before retrieval.
+
+Example routes:
+
+```text
+fact_lookup -> metadata + hybrid retrieval
+lesson_personalization -> unresolved learner-memory retrieval
+evaluation_design -> recent session + weak concept retrieval
+contradiction_resolution -> claim/source retrieval + contradiction history
+curriculum_planning -> concept graph + mastery + unresolved gaps
+news_connection -> curriculum_state + concept overlap + sparse RAG
+```
+
+Start with rule-based routing. Add LLM-based routing only after we have enough logged examples to evaluate it.
 
 ## RAG Write Rules
 
@@ -482,8 +893,12 @@ Recommended ranking pipeline:
 2. filter by topic where relevant
 3. filter by `eventType`
 4. filter by `isResolved` where relevant
-5. run vector search inside the filtered candidate set
-6. re-rank by confidence and recency if needed
+5. infer safe metadata filters when the query contains clear topic/concept/time signals
+6. run vector and/or lexical search inside the filtered candidate set
+7. merge candidates when hybrid search is used
+8. re-rank by confidence, recency, freshness, and unresolved status if needed
+9. reorder long context packs to reduce lost-in-the-middle risk
+10. return a compact context pack with provenance
 
 ### Example
 
@@ -498,6 +913,151 @@ It should:
 - optionally use similarity inside that narrowed set
 
 This keeps retrieval precise, cheap, and less noisy.
+
+### Lost-in-the-middle ordering
+
+When more than six context items are passed into a prompt, do not place all important evidence in the middle.
+
+Recommended ordering:
+
+```text
+1. most important evidence
+2. second most important evidence
+3. supporting evidence
+4. lower priority context
+5. supporting evidence
+6. third most important evidence
+```
+
+The highest-value evidence should appear near the beginning or end of the prompt context. This matters because long-context models can still under-use middle content.
+
+### Context pack contract
+
+Retrieval should return a structured context pack, not a loose array of strings.
+
+```ts
+interface RAGContextPack {
+  requestId: string;
+  userId: string;
+  agent: RAGRetrievalRequest['agent'];
+  mode: 'metadata' | 'semantic' | 'lexical' | 'hybrid' | 'hierarchical' | 'graph_enhanced';
+  rewrittenQueries: string[];
+  inferredFilters: RAGFilters;
+  items: Array<{
+    id: string;
+    eventType: RAGMemoryEntry['eventType'];
+    concept: string | null;
+    content: string;
+    sourceAgent: string;
+    score: number;
+    rankingSignals: {
+      vectorScore?: number;
+      lexicalScore?: number;
+      confidence?: number;
+      recency?: number;
+      freshness?: number;
+      unresolvedBoost?: number;
+    };
+  }>;
+}
+```
+
+### Citation verification
+
+When the answer makes a factual claim from retrieved context, the system should verify that the claim is supported by at least one context item.
+
+Required for:
+
+- source-backed factual answers
+- contradiction resolutions
+- research summaries
+- tool/version explanations
+- compliance-like or high-confidence statements
+
+Not required for:
+
+- purely motivational teaching language
+- learner preference reminders
+- low-risk UX copy
+
+Citation verification should check:
+
+- every cited source exists in the context pack
+- cited source is permitted for the user
+- answer does not cite irrelevant context
+- generated claim does not exceed what the source says
+- stale or superseded sources are labeled or excluded
+
+If citation verification fails, the answer should be regenerated with stricter instructions, refused, or routed to a safer workflow.
+
+---
+
+## Hierarchical Retrieval
+
+LRNR should not always search thousands of small memory rows directly.
+
+For large histories, use a two-stage path:
+
+```text
+Stage 1:
+  retrieve relevant summaries
+
+Stage 2:
+  retrieve detailed events linked to those summaries
+```
+
+Recommended summary rows:
+
+- daily session summary
+- weekly learning summary
+- topic progress summary
+- concept weakness summary
+- contradiction summary
+- source/document summary for external knowledge
+
+This gives LRNR the benefit of document-summary retrieval while preserving learner-memory precision.
+
+Use hierarchical retrieval when:
+
+- the learner has a long history
+- the agent needs broad context before details
+- a direct top-k vector search returns scattered rows
+- the query is about progress over time
+
+---
+
+## Learner-History Cache
+
+Repeated questions should not always trigger full embedding, retrieval, and generation.
+
+Add a safe cache layer for repeated or near-repeated questions:
+
+```text
+user_id
+normalized_question
+question_embedding
+answer_summary
+source_context_ids
+created_at
+expires_at
+answer_version
+```
+
+Use it only when:
+
+- the prior answer is still fresh
+- source context has not changed
+- the question is semantically very close
+- the cached answer has provenance
+
+Do not use it when:
+
+- the user asks for the latest information
+- the underlying topic knowledge changed
+- the prior answer had low confidence
+- the question is evaluative and needs a fresh probe
+
+This improves latency and cost without making RAG stale.
 
 ---
 
@@ -640,6 +1200,262 @@ Add logging for:
 - number of candidates searched
 - number of rows returned
 - embedding batch sizes
+- retrieval mode
+- rewritten query count
+- inferred metadata filters
+- lexical candidates
+- vector candidates
+- final context token count
+- empty-result rate
+- cache hit/miss
+
+---
+
+## RAG Observability
+
+RAG needs observability because most failures are silent.
+
+A broken RAG pipeline may still return:
+
+- a fluent answer
+- normal HTTP status
+- acceptable latency
+- plausible citations
+
+So the system must trace the retrieval path itself.
+
+Reference:
+
+```text
+https://mallahyari.github.io/rag-ebook/05_observability_tools.html
+```
+
+The useful lesson from the reference is not that LRNR must use one specific vendor. The useful lesson is that RAG needs visibility into prompts, retrieved context, indexing, querying, model calls, latency, token count, and evaluation traces.
+
+### Preferred tool posture
+
+Use open-source-first observability where possible.
+
+Recommended stack:
+
+| Layer | Tool | Purpose |
+|------|------|---------|
+| Application logs | Pino | structured request/job logs |
+| Distributed traces | OpenTelemetry | trace API -> retrieval -> rerank -> LLM -> verification |
+| Metrics | Prometheus | numeric backend and RAG metrics |
+| Dashboards | Grafana | operational visibility |
+| LLM/RAG traces | Phoenix or Langfuse | inspect prompts, retrieved chunks, spans, token usage |
+| Evaluation experiments | RAGAS-style scripts or Phoenix evals | faithfulness, relevance, retrieval quality |
+
+Optional later:
+
+- Weights & Biases for experiment tracking and dataset/model comparison
+- HoneyHive for managed prompt/eval workflows if the product needs it
+
+Do not add a paid observability platform before we know what pain it solves.
+
+### Required RAG trace spans
+
+Every RAG request should create a trace with these spans:
+
+```text
+rag.request
+  rag.route_intent
+  rag.query_rewrite
+  rag.permission_filter
+  rag.lexical_retrieval
+  rag.vector_retrieval
+  rag.rank_fusion
+  rag.rerank
+  rag.confidence_gate
+  rag.context_pack_build
+  llm.generate
+  rag.citation_verify
+  rag.evaluation_log
+```
+
+Not every span runs every time. For example, metadata-only retrieval may skip lexical retrieval, vector retrieval, reranking, and citation verification.
+
+### What each trace must capture
+
+Capture safe metadata:
+
+- request id
+- user id hash, not raw user identity in external tools
+- agent name
+- retrieval mode
+- query intent
+- original query hash
+- rewritten query count
+- inferred filters
+- candidate counts by retrieval mode
+- final context item count
+- final context token count
+- reranker top score
+- confidence threshold
+- confidence gate decision
+- citation verification result
+- cache hit/miss
+- per-stage latency
+- provider/model names
+- token usage
+- error code if failed
+
+Do not send raw private learner memory, raw transcripts, secrets, or sensitive source text to third-party observability tools unless explicitly approved.
+
+### RAG dashboards
+
+Minimum dashboards:
+
+- retrieval latency p50/p95/p99
+- reranker latency p50/p95/p99
+- generation latency p50/p95/p99
+- citation verification latency
+- empty retrieval rate
+- confidence refusal rate
+- citation verification failure rate
+- top-k average relevance score
+- cache hit ratio
+- token cost per RAG answer
+- retrieval mode distribution
+- query rewrite usage
+- permission-filter failure count
+- stale-context usage count
+
+### RAG alerts
+
+Alert when:
+
+- citation verification failure rate spikes
+- confidence refusal rate spikes or drops unexpectedly
+- empty retrieval rate spikes
+- retrieval latency breaches product target
+- reranker latency breaches product target
+- permission-filter failure count is greater than zero
+- RAG cost per answer grows unexpectedly
+- retrieval mode distribution changes suddenly after deployment
+
+### Trace-based debugging questions
+
+When an answer is bad, the trace should let us answer:
+
+- did ingestion store the right content?
+- did metadata filters remove the right candidates?
+- did lexical retrieval find exact terms?
+- did vector retrieval find semantic matches?
+- did rank fusion combine candidates correctly?
+- did reranking promote the right evidence?
+- did the confidence gate allow weak evidence?
+- did the prompt include the evidence in a useful order?
+- did citation verification catch unsupported claims?
+- did stale or unauthorized context enter the answer?
+
+If we cannot answer these questions from traces, the RAG system is not observable enough.
+
+---
+
+## RAG Evaluation
+
+RAG must be evaluated as a system, not trusted because the answer "looks good."
+
+Track these quality dimensions:
+
+| Dimension | Meaning |
+|----------|---------|
+| Retrieval precision | Did returned memories actually matter? |
+| Retrieval recall | Did retrieval miss known relevant memory? |
+| Faithfulness | Is the generated answer supported by retrieved context? |
+| Relevance | Did the answer address the current teaching/evaluation need? |
+| Freshness | Was stale memory avoided or marked correctly? |
+| Latency | Did retrieval complete inside product targets? |
+| Cost | Did the query use a reasonable number of tokens/provider calls? |
+| Hallucination rate | How often did the answer include unsupported claims? |
+| Permission safety | Did retrieval avoid unauthorized context? |
+| Citation accuracy | Did cited evidence actually support the generated claim? |
+
+Recommended evaluation tools:
+
+- golden dataset of question-answer-source triples
+- trace-based regression tests
+- RAGAS-style faithfulness and answer relevance checks
+- manual expert review for high-risk examples
+- production feedback signals from user behavior
+
+Evaluation dataset:
+
+- curated onboarding examples
+- known misconception examples
+- repeated question examples
+- ambiguous query examples
+- exact-term examples
+- long-history examples
+- stale-memory examples
+- contradiction examples
+- permission-boundary examples
+- citation-verification examples
+- no-answer examples where refusal is correct
+
+Every retrieval change should be tested against this dataset before becoming default.
+
+Minimum offline tests:
+
+- metadata-only vs semantic-only vs hybrid retrieval
+- chunk size or event granularity changes
+- query rewriting on/off
+- lost-in-the-middle reordering on/off
+- learner-history cache hit/miss behavior
+- reranking on/off
+- confidence threshold changes
+- citation verification pass/fail cases
+- permission-filter enforcement cases
+
+Minimum online signals:
+
+- user clicked "helpful"
+- user asked a clarification immediately after answer
+- evaluation score improved after retrieval-assisted teaching
+- agent marked context as insufficient
+- contradiction agent found unsupported answer
+- confidence gate refusal rate
+- citation verification failure rate
+- per-stage latency for retrieval, reranking, generation, and verification
+
+---
+
+## Freshness and Staleness Control
+
+RAG failure often comes from old memory being treated as current truth.
+
+Every row that can become outdated should have one of:
+
+- `expiresAt`
+- `freshnessAt`
+- `supersededById`
+- `isResolved`
+- `stalenessReason`
+
+Examples:
+
+```text
+misconception_detected -> can become resolved
+news-based injection -> can expire
+tool/version explanation -> can become outdated
+learner preference -> can change
+```
+
+Retrieval should prefer:
+
+- unresolved but current gaps
+- recent session summaries
+- high-confidence stable mastery
+- source-backed current claims
+
+Retrieval should downrank:
+
+- resolved misconceptions unless reviewing growth
+- expired news items
+- old low-confidence rows
+- rows superseded by newer evidence
 
 ---
 
@@ -654,6 +1470,13 @@ Add logging for:
 | Invalid event type | Reject at validation boundary. |
 | Topic missing on topic-scoped write | Throw validation error unless cross-topic event is intentional. |
 | Duplicate session summary write | Reject or no-op using idempotency checks. |
+| Query rewrite returns unsafe filters | Ignore inferred filters and fall back to explicit metadata only. |
+| Hybrid retrieval returns conflicting candidates | Keep both only if provenance is clear, then ask Contradiction Agent if needed. |
+| Cached answer is stale | Bypass cache, refresh retrieval, and update cache after successful answer. |
+| Context pack too large | Reduce by score, concept diversity, and lost-in-the-middle ordering. |
+| Reranker scores are below threshold | Refuse, ask a clarifying question, or fall back to safer retrieval. |
+| Retrieval finds unauthorized context | Treat as security bug, drop result, log incident, and fail closed. |
+| Citation verification fails | Regenerate with stricter evidence rules or refuse the answer. |
 
 ---
 
@@ -668,6 +1491,15 @@ Priority tests:
 - empty retrieval does not crash Teaching or Evaluation
 - session summary writes are idempotent
 - canonical content formatting is stable
+- hybrid retrieval beats semantic-only on exact-term cases
+- query rewriting improves ambiguous query retrieval without changing intent
+- query routing selects the correct retrieval mode for each agent
+- learner-history cache refuses stale answers
+- lost-in-the-middle ordering preserves top evidence near prompt edges
+- RAG evaluation dataset runs before retrieval defaults change
+- confidence gate refuses weak-evidence answers
+- permission filters are applied before vector and lexical retrieval
+- citation verifier catches unsupported generated claims
 
 ---
 
@@ -679,3 +1511,9 @@ Priority tests:
 - Must NOT trust arbitrary LLM-generated shapes before validation.
 - Must NOT skip onboarding seed memory.
 - Must NOT re-embed unchanged content casually.
+- Must NOT treat cached answers as source of truth.
+- Must NOT allow query rewriting to invent intent.
+- Must NOT pass large context packs without ordering and token budgeting.
+- Must NOT answer when evidence is below the confidence threshold.
+- Must NOT retrieve unauthorized context and hope later layers remove it.
+- Must NOT present citations that do not directly support the answer.

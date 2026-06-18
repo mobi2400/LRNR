@@ -5,6 +5,25 @@
 
 ---
 
+## Current Alignment Note
+
+This graph document has been updated to match the current LRNR product direction:
+
+```text
+Frontend is the primary learning surface.
+Telegram is notification, reminder, and failure alerting.
+Backend workflows persist lessons and state.
+```
+
+For the latest route/state-machine rules, also read:
+
+```text
+docs/33_AGENT_ORCHESTRATION_ROUTES.md
+docs/30_PHASE_1_12_PART_IMPLEMENTATION_PLAN.md
+```
+
+---
+
 ## Graph Identity
 
 | Property | Value |
@@ -20,7 +39,37 @@
 
 ## What This Graph Does — Plain English
 
-The Learning Graph is the daily experience engine. Every morning at 7:00 AM IST it runs, reads the user's current state, makes a routing decision, runs the appropriate agents in sequence, and delivers a session to Telegram. It is the only graph that directly interacts with the user's daily experience.
+The Learning Graph is the daily learning workflow. It runs on schedule or by manual trigger, reads the owner's current state, makes a routing decision, runs the appropriate agents, persists the lesson/session state, and queues Telegram alerts that link back to the frontend.
+
+Current route model:
+
+```text
+Phase 1:
+  new_goal
+  continue_teaching
+  waiting_for_onboarding_reply
+  no_op
+  safe_failure_alert
+
+Phase 2:
+  evaluation_due
+  reconcile_evaluation
+
+Phase 3:
+  daily_research
+  nightly_reconcile
+  contradiction_resolution
+  digest_delivery
+```
+
+Current delivery meaning:
+
+```text
+Persist lesson/session state for frontend study.
+Queue Telegram alert/deep link if useful.
+Do not treat Telegram as the primary lesson surface.
+Do not require every successful no-op to send Telegram.
+```
 
 The graph has three routes. Route A handles new topic starts — it runs the full pipeline from Architect through Cartographer through Curriculum Builder through Teaching. This route only runs when the user has no active topic or has explicitly requested a new one. Route B handles evaluation days — it skips Teaching and runs the Evaluation Agent instead, then passes findings to Curriculum Builder for reconciliation before the next session. Route C is the normal daily path — it reads today's session from the curriculum, runs Teaching, and delivers. The routing decision happens in a single node that reads the profile and makes the call.
 
@@ -760,8 +809,131 @@ NODE_ENV=development MOCK_LLM=false pnpm run dev:learning
 ## What This Graph Must NOT Do
 
 - Must NOT run the Research Graph agents (`scout_node`, `news_intelligence_node`, `contradiction_node`). Those belong in the Research Graph.
-- Must NOT have parallel node execution. This is a fully sequential graph.
+- Must NOT parallelize dependent agent outputs. Independent reads/fetches/checks may run in parallel only with explicit fan-in validation.
 - Must NOT skip `delivery_node` or `update_rag_node` under any circumstances. These are the safety net and the memory — they always run.
 - Must NOT hardcode the user ID. Always read from `process.env.USER_ID`.
 - Must NOT allow a node to throw uncaught errors. Every node must have a try/catch that returns error state.
 - Must NOT call `delivery_node` directly from `load_profile_node` even if the profile fails to load. Always go through `route_node`.
+
+---
+
+## Modernization Overrides
+
+This section overrides older Telegram-first and fully sequential wording elsewhere in this file.
+
+### Product Surface Override
+
+Current rule:
+
+```text
+Frontend is the primary study surface.
+Telegram is alerting and deep-link delivery.
+```
+
+Therefore:
+
+- generated lessons must be persisted for frontend rendering
+- Telegram alerts should link back to the frontend
+- Telegram should not be treated as the full lesson delivery surface
+- successful no-op routes do not need to send Telegram
+- safe failure alerts can use Telegram when configured
+
+### Routing Override
+
+Current Phase 1 routes:
+
+```text
+new_goal
+continue_teaching
+waiting_for_onboarding_reply
+no_op
+safe_failure_alert
+```
+
+Phase 2 adds:
+
+```text
+evaluation_due
+reconcile_evaluation
+```
+
+Phase 3 adds:
+
+```text
+daily_research
+nightly_reconcile
+contradiction_resolution
+digest_delivery
+```
+
+### Hybrid Routing Override
+
+The old rule "fully sequential graph" is no longer correct.
+
+Current rule:
+
+```text
+Sequential when outputs are dependent.
+Parallel when work is independent.
+Fan-in and validate before dependent work continues.
+```
+
+Keep sequential:
+
+```text
+Architect -> Cartographer -> Curriculum Builder -> Teaching
+```
+
+Allow safe parallelism:
+
+- independent DB reads
+- bounded source fetching
+- context preparation
+- health checks
+- post-persistence side effects such as RAG summary write and notification queueing
+
+Never parallelize:
+
+- conflicting writes to the same authoritative row
+- Teaching before curriculum exists
+- delivery before lesson persistence
+- RAG summary before lesson/session content exists
+
+### Delivery Node Override
+
+Current `delivery_node` meaning:
+
+```text
+persist delivery/session state
+queue delivery_outbox notification
+send Telegram alert/deep link through notification worker
+record safe failure alert if needed
+```
+
+It does not mean:
+
+```text
+send the entire lesson to Telegram
+always send Telegram for every route
+mark delivery successful before persistence succeeds
+```
+
+### RAG Failure Record Override
+
+Do not write misleading RAG session summaries for failed lessons.
+
+Allowed:
+
+- write operational failure trace to logs/job metadata
+- queue repair if summary write failed after successful lesson persistence
+- write RAG memory only when it has future learning value
+
+### Source Of Truth
+
+For implementation, prefer these newer files when this file conflicts:
+
+```text
+docs/30_PHASE_1_12_PART_IMPLEMENTATION_PLAN.md
+docs/33_AGENT_ORCHESTRATION_ROUTES.md
+docs/32_PHASE_1_API_CONTRACT.md
+```

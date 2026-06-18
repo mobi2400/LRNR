@@ -4,6 +4,26 @@
 
 ---
 
+## Current Implementation Override
+
+Profile identity is based on authenticated owner/user id.
+
+```text
+user_profile.user_id = Auth.js/Supabase authenticated user id
+telegram_chat_id = notification preference metadata
+```
+
+Do not use Telegram user id as the primary identity key in new code.
+
+For implementation, prefer repository naming from `docs/31_REPOSITORY_STRUCTURE.md`, such as:
+
+```text
+src/db/profile.repo.ts
+src/types/profile.types.ts
+```
+
+---
+
 ## What The Profile Engine Is
 
 The Profile Engine is not an agent. It is a service layer — a set of typed TypeScript functions in `src/db/profile.ts` that every agent uses to read and write user profile data. It is the central nervous system of the entire system.

@@ -4,6 +4,22 @@
 
 ---
 
+## Current Implementation Override
+
+Contradiction Agent is Phase 3, not Phase 1.
+
+This file contains older Telegram-formatted teaching examples. Current direction:
+
+```text
+Contradiction Agent produces structured contradiction explanations.
+Frontend renders the explanation with sources and context.
+Telegram may alert/deep-link only when useful.
+```
+
+When this file says "Telegram-formatted teaching piece," implement a structured frontend contradiction card plus optional short notification summary.
+
+---
+
 ## Agent Identity
 
 | Property | Value |

@@ -4,6 +4,22 @@
 
 ---
 
+## Current Implementation Override
+
+Scout is Phase 3, not Phase 1.
+
+This file contains older references to Telegram-formatted Layer 3 content. Current direction:
+
+```text
+Scout creates structured findings.
+Layer 3 is rendered in the frontend lesson UI.
+Telegram may alert/deep-link, but does not carry the full teaching content.
+```
+
+When this file says "pre-formatted for Telegram delivery," implement it as frontend-safe structured Layer 3 content plus optional notification summary.
+
+---
+
 ## Agent Identity
 
 | Property | Value |

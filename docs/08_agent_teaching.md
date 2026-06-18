@@ -4,6 +4,40 @@
 
 ---
 
+## Current Implementation Override
+
+This file contains older Telegram-first examples. Current Phase 1 implementation is frontend-first:
+
+```text
+Teaching Agent creates a persisted lesson payload for the frontend.
+Telegram receives only an alert/deep link through the notification layer.
+```
+
+When this file mentions "Telegram messages" for full lesson delivery, reinterpret that as structured frontend lesson sections:
+
+- mental model
+- explanation
+- diagram
+- code examples
+- common mistakes
+- review questions
+- source references
+- next action
+
+Do not send the full lesson as Telegram message sequence in Phase 1.
+
+Current primary output:
+
+```text
+structured lesson payload
+  -> persisted in curriculum/session state
+  -> rendered by frontend
+  -> summarized into RAG when useful
+  -> announced through Telegram alert/deep link
+```
+
+---
+
 ## Agent Identity
 
 | Property | Value |

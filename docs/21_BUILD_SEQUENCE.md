@@ -1,6 +1,7 @@
 # LRNR - Build Sequence
 > **Load alongside all 4 foundation files before planning implementation work.**
 > **Foundation files: 01_projectoverview.md, 02_architecture.md, 03_DATA_SCHEMA.md, 04_STACK_AND_CONVENTIONS.md**
+> **For Phase 1 execution, use 30_PHASE_1_12_PART_IMPLEMENTATION_PLAN.md as the primary task breakdown.**
 
 ---
 
@@ -85,7 +86,8 @@ Build the minimum end-to-end system that can:
 2. run Architect onboarding
 3. run Cartographer topic research
 4. run Curriculum Builder initial planning
-5. run Teaching delivery to Telegram
+5. run Teaching lesson generation for the frontend
+6. send Telegram alert/deep link when the lesson is ready
 
 ### Components included
 
@@ -98,7 +100,8 @@ Build the minimum end-to-end system that can:
 - `Topic Brief` writes
 - `Topic Knowledge Base` writes
 - `Curriculum State` creation
-- `Telegram delivery`
+- `Frontend lesson rendering`
+- `Telegram alert/deep-link delivery`
 - `RAG onboarding seed`
 - `RAG session summary writes`
 
@@ -200,7 +203,8 @@ Build:
 Build:
 
 - lesson generation
-- Telegram formatting and send sequence
+- persisted lesson payload for frontend rendering
+- Telegram alert/deep-link sequence
 - Layer 3 read path even if Layer 3 is mostly empty in Slice 1
 - session summary RAG write
 - session delivery marking
@@ -220,18 +224,19 @@ Build:
 
 Slice 1 is done when all are true:
 
-- a user can state a new goal in Telegram
+- the owner can state a new goal in the frontend
 - Architect can complete onboarding without manual intervention
 - roadmap, profile, topic brief, and onboarding RAG entries are created
 - Cartographer can build a usable topic knowledge base from real sources
 - Curriculum Builder can create initial sessions
-- Teaching can deliver a lesson cleanly through Telegram
+- Teaching can create a grounded lesson that renders cleanly in the frontend
+- Telegram sends a safe alert/deep link to the lesson
 - a session summary is written to RAG
 - the flow can be rerun without duplicate lesson delivery
 
 ### Slice 1 is NOT done if
 
-- onboarding only works locally but not through Telegram flow
+- onboarding only works locally but not through the frontend/backend flow
 - Teaching sends generic lessons with no real grounding
 - Cartographer output is too weak to support actual teaching
 - RAG writes are skipped

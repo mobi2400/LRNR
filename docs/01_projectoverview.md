@@ -16,7 +16,7 @@ This is not a course platform. Not a news aggregator. Not a tutoring app. It is 
 - adapts the curriculum based on what it discovers
 - connects learning to live industry developments
 
-Initial delivery is through Telegram because it keeps friction low. Telegram is the first surface, not necessarily the final surface for every type of interaction.
+Current delivery direction: the LRNR web frontend is the primary learning surface. Telegram is used for notifications, reminders, failure alerts, lightweight digests, and deep links back to the frontend.
 
 **The single sentence:** *The course that never goes out of date, because it is not a course.*
 
@@ -195,9 +195,9 @@ That only matters later. In Phase 1, the goal is to make the system genuinely us
 
 **Phase:** Pre-development. The architecture direction is strong, but the docs are intentionally still being refined.
 
-**Target:** Slice 1 running in Telegram by the end of the first coding week.
+**Target:** Phase 1 private core deployed as a frontend-first private alpha, with Telegram alerts/deep links.
 
-**Slice 1 scope:** Architect Agent + Cartographer Agent + Curriculum Builder + Teaching Agent + basic Profile Engine + Telegram delivery.
+**Phase 1 scope:** owner-only auth, frontend learning cockpit, Architect Agent, Cartographer Agent, Curriculum Builder initial mode, Teaching Agent, basic Profile Engine, RAG onboarding/session memory, Telegram alerting, and deployable private workflow.
 
 No evaluation, no scout, no news in Slice 1. Just the core learning loop working end to end.
 
@@ -217,3 +217,14 @@ When coding any component, always load these foundation files first:
 | `04_STACK_AND_CONVENTIONS.md` | stack, folder structure, coding patterns, implementation rules |
 
 Then load the specific agent or component file for the session.
+
+For Phase 1 implementation, also load:
+
+| File | Contains |
+|------|----------|
+| `27_PHASE_1_PRIVATE_CORE_FLOW.md` | Phase 1 product and system flow |
+| `30_PHASE_1_12_PART_IMPLEMENTATION_PLAN.md` | 12-part agent execution plan |
+| `31_REPOSITORY_STRUCTURE.md` | target folder/file structure |
+| `32_PHASE_1_API_CONTRACT.md` | Phase 1 endpoint contracts |
+| `33_AGENT_ORCHESTRATION_ROUTES.md` | route/state-machine rules |
+| `34_DEPLOYMENT_ENV_CHECKLIST.md` | deployment, env, and smoke test checklist |

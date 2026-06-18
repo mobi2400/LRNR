@@ -1,6 +1,7 @@
 # LRNR - Workflow Daily Learning
 > **Load alongside all 4 foundation files before coding this workflow.**
 > **Foundation files: 01_projectoverview.md, 02_architecture.md, 03_DATA_SCHEMA.md, 04_STACK_AND_CONVENTIONS.md**
+> **Also load: 30_PHASE_1_12_PART_IMPLEMENTATION_PLAN.md, 32_PHASE_1_API_CONTRACT.md, 33_AGENT_ORCHESTRATION_ROUTES.md**
 
 ---
 
@@ -18,7 +19,7 @@
 
 ## What This Workflow Does
 
-This is the workflow that produces the learner's daily experience.
+This is the workflow that prepares the learner's daily experience.
 
 It is not a dumb cron that always sends a lesson.
 
@@ -31,6 +32,15 @@ Its real job is to decide:
 - did background agents leave Layer 3 context that should be surfaced
 
 Then it must run the correct path and persist the outcome safely.
+
+Current direction:
+
+```text
+Frontend displays the lesson.
+Telegram alerts and deep-links.
+```
+
+This workflow should persist lesson/session state first, then queue notification through `delivery_outbox`.
 
 ---
 
@@ -238,7 +248,7 @@ If delivery fails before the Layer 3 item is truly shown, the item should not be
 | Profile load fails | Log and fail workflow |
 | No active curriculum for teaching route | Log inconsistency and exit safely |
 | Teaching generation fails | Log, mark workflow failed, do not mark session delivered |
-| Telegram delivery partially fails | Retry by message rules; do not double-mark success blindly |
+| Telegram alert fails | Log and mark notification failure. Do not mark lesson generation as failed if lesson persistence succeeded. |
 | RAG summary write fails after successful delivery | Log critical partial failure and queue repair if needed |
 | Evaluation starts but user reply is needed | Persist waiting state and end workflow cleanly |
 
@@ -291,4 +301,5 @@ Priority tests:
 - Must NOT bypass route logic.
 - Must NOT directly mutate Layer 2 outside Curriculum Builder ownership.
 - Must NOT lose interactive conversation state.
-- Must NOT mark a session delivered before Telegram delivery truly succeeds.
+- Must NOT mark a lesson ready before lesson persistence succeeds.
+- Must NOT treat Telegram as the primary lesson surface.

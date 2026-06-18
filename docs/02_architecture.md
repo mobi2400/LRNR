@@ -50,7 +50,7 @@ Architect and Evaluation are multi-turn conversations. They are not one-shot cro
 
 The implementation must explicitly handle:
 
-- conversation persistence between Telegram replies
+- conversation persistence between frontend interactions and any supported Telegram replies
 - resume behavior after user response
 - timeout or abandonment
 - duplicate message protection
@@ -141,7 +141,8 @@ Layer write rules are not just documentation. They must be enforced in db and ap
 
 **Primary outputs:**
 
-- Telegram lesson delivery
+- persisted frontend lesson payload
+- optional Telegram alert/deep link
 - session status update
 - session summary memory
 
@@ -223,28 +224,29 @@ Layer write rules are not just documentation. They must be enforced in db and ap
 
 Purpose: onboarding, teaching, and evaluation flow.
 
-High-level route:
+Current Phase 1 route:
 
 ```text
 START
   -> route_node
-  -> if new topic:
+  -> if new goal/no active topic:
        architect_node
        cartographer_node
        curriculum_builder_node (initial)
        teaching_node
-     else:
-       profile_check_node
-       -> if evaluation due:
-            evaluation_node
-            curriculum_builder_node (reconcile learning consequences)
-            teaching_node or evaluation-close flow
-       -> else:
-            teaching_node
-  -> delivery_node
-  -> persist_node
+     else if active topic + pending session:
+       teaching_node
+     else if waiting for onboarding reply:
+       pause/no-op
+  -> persist lesson/session state
+  -> queue notification/deep link if useful
+  -> RAG update
   -> END
 ```
+
+Phase 2 adds evaluation routing. Phase 3 adds separate daily research and nightly reconcile workflows.
+
+The graph uses hybrid orchestration: dependent agent outputs stay sequential, independent reads/fetches/checks may run in parallel with explicit fan-in validation.
 
 ### Graph 2 - Research Graph
 
@@ -359,13 +361,20 @@ The schedule should serve the learner state, not the other way around.
 
 This architecture is strong, but some parts are still intentionally incomplete at the docs stage.
 
-The main unresolved implementation details that must be decided in code are:
+The older Telegram-first assumptions have been replaced by frontend-first implementation docs. For coding, prefer:
 
-- Telegram conversation resume model
+- `30_PHASE_1_12_PART_IMPLEMENTATION_PLAN.md`
+- `32_PHASE_1_API_CONTRACT.md`
+- `33_AGENT_ORCHESTRATION_ROUTES.md`
+- `34_DEPLOYMENT_ENV_CHECKLIST.md`
+
+The main implementation details that must be validated in code are:
+
+- frontend/Telegram conversation resume model
 - exact evaluation cadence semantics
 - optimistic locking / idempotency strategy
 - queue claim and retry behavior
 - provenance storage detail
-- whether a richer companion surface is needed for diagrams and deep code walkthroughs
+- exact frontend rendering contracts for diagrams and deep code walkthroughs
 
 These are not optional details. They are part of making the architecture real.

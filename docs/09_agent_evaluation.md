@@ -33,6 +33,93 @@ The user experience of this agent should feel like a thoughtful conversation wit
 
 ---
 
+## Voice UX With ElevenLabs
+
+ElevenLabs should be integrated as a voice layer for evaluation in this version of the product experience.
+
+Purpose:
+
+- make evaluation feel more conversational
+- reduce fatigue during difficult questions
+- let the user hear a question in a more natural tone
+- support rephrasing from a different angle
+- provide short spoken encouragement between questions
+- explain the purpose of a question before the user answers
+- allow the user to answer by voice
+- convert spoken answers into reviewed transcripts before scoring
+
+Important rule:
+
+```text
+Text remains the source of truth. Voice is a UX enhancement.
+The confirmed transcript is the evaluated answer.
+```
+
+The Evaluation Agent should always produce the written question, written follow-up, written analysis, and structured records first. The backend can then generate audio from the approved text.
+
+For user answers, the Evaluation Agent should evaluate the confirmed transcript, not raw audio. The frontend should let the owner review and edit the transcript before final submission.
+
+Do not let the voice provider decide:
+
+- what question to ask
+- whether the answer is correct
+- what mastery score to assign
+- what remediation should be queued
+- whether an unconfirmed transcript is accurate
+
+ElevenLabs should read approved LRNR content and help transcribe spoken answers. It should not become an evaluator.
+
+### Voice use during different question angles
+
+Voice can help each evaluation angle feel distinct:
+
+| Angle | Voice UX idea |
+|---|---|
+| Direct recall | Ask calmly and briefly |
+| Application | Read the scenario like a real engineering situation |
+| Stress test | Use a curious challenge tone, not an aggressive tone |
+| Edge case | Slow down and emphasize the constraint |
+| Connection | Remind the user of the prior concept before asking |
+| Historical | Tell the problem context before asking why the solution exists |
+
+### Voice rephrase rule
+
+If the user is stuck, LRNR may offer:
+
+```text
+Hear this from another angle
+```
+
+That should generate a rephrased explanation or question using the Evaluation Agent/LLM first, validate it, then optionally send it to ElevenLabs for audio.
+
+The system must not skip evaluation scoring just because the learner requested audio help.
+
+### Voice answer rule
+
+The user can answer by speaking.
+
+Required flow:
+
+```text
+spoken answer
+  -> transcription
+  -> transcript shown to user
+  -> user confirms or edits
+  -> confirmed transcript enters evaluation
+  -> transcript is stored in evaluation_sessions
+```
+
+Why this matters:
+
+- speech recognition can make mistakes
+- wrong transcripts can create false mastery evidence
+- text records are easier to review, debug, and use in RAG
+- the system remains usable even when audio fails
+
+Raw audio should be temporary by default. The confirmed transcript is the durable learning artifact.
+
+---
+
 ## Inputs
 
 ### From LangGraph State

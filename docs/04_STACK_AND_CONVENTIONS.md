@@ -15,7 +15,8 @@
 | LLM - Fast/Volume | Groq `llama-3.1-8b-instant` | Scout, Curriculum Builder, ranking, classification |
 | Database | Supabase | PostgreSQL + pgvector |
 | Scraping | Firecrawl | Topic and article extraction |
-| Delivery | Telegraf | Telegram bot delivery |
+| Frontend | Next.js | Primary learning cockpit |
+| Notifications | Telegraf | Telegram alerts, reminders, and deep links |
 | Package Manager | pnpm | Dependency management |
 | Validation | zod | Runtime validation of external and generated data |
 | Testing | vitest | Unit and integration tests |
@@ -24,23 +25,35 @@
 
 ## Project Structure
 
-Target structure:
+Target structure is defined in:
 
 ```text
-lrnr/
+docs/31_REPOSITORY_STRUCTURE.md
+```
+
+High-level shape:
+
+```text
+/
+  AGENTS.md
+  docs/
+  handbook/
+  public/
+  scripts/
   src/
+    app/
     agents/
-    graphs/
-    nodes/
+    components/
     db/
     lib/
-    prompts/
+    schemas/
+    server/
+    services/
     types/
     utils/
     workflows/
-  scripts/
-  docs/
-  .github/workflows/
+    workers/
+  tests/
 ```
 
 ### Boundary rules
@@ -218,6 +231,38 @@ This rule should shape both db logic and workflow logic.
 
 Use structured logging.
 
+Logging stack:
+
+- Morgan for HTTP access logs
+- Winston for structured application, worker, provider, agent, and RAG logs
+- OpenTelemetry for traces
+- Prometheus for metrics
+
+Morgan should log:
+
+- HTTP method
+- route
+- status code
+- response time
+- response size
+- request id
+- user id hash if available
+
+Winston should log:
+
+- timestamp
+- level
+- service
+- environment
+- request id
+- user id hash
+- job id when available
+- agent name when available
+- event name
+- duration
+- error code
+- safe metadata
+
 Log at least:
 
 - workflow start
@@ -229,7 +274,23 @@ Log at least:
 - retry attempts
 - important decisions
 
-Never log secrets.
+Never log:
+
+- secrets
+- auth headers
+- cookies
+- raw voice transcripts
+- raw private RAG context
+- full prompts containing sensitive learner/source content
+
+Do not rely on logs alone.
+
+```text
+Logs explain events.
+Metrics show health over time.
+Traces show where time went.
+Dashboards show the operating picture.
+```
 
 ---
 
@@ -270,7 +331,7 @@ Mock expensive systems carefully:
 - LLMs
 - scraping
 - embeddings
-- Telegram delivery
+- Telegram alerting/deep links
 
 ---
 
@@ -279,7 +340,7 @@ Mock expensive systems carefully:
 When the repo scaffold is created, this is the baseline package set:
 
 ```bash
-pnpm add @langchain/langgraph @langchain/core @supabase/supabase-js telegraf groq-sdk zod p-retry p-limit rss-parser date-fns @mobasshirkhan/docguard
+pnpm add @langchain/langgraph @langchain/core @supabase/supabase-js telegraf groq-sdk zod p-retry p-limit rss-parser date-fns @mobasshirkhan/docguard drizzle-orm postgres next-auth winston morgan ioredis
 pnpm add -D typescript tsx @types/node eslint prettier @typescript-eslint/parser @typescript-eslint/eslint-plugin vitest
 ```
 
@@ -287,7 +348,12 @@ pnpm add -D typescript tsx @types/node eslint prettier @typescript-eslint/parser
 
 - `@langchain/langgraph` for workflow orchestration
 - `@supabase/supabase-js` for data access
-- `telegraf` for Telegram
+- `drizzle-orm` and `postgres` for typed database access and migrations
+- `next-auth` / Auth.js for owner login
+- `telegraf` for Telegram alerts and deep links
+- `winston` for structured application logs
+- `morgan` for HTTP access logs
+- `ioredis` for Redis/Valkey cache, locks, and rate limits
 - `groq-sdk` for Groq provider access
 - `zod` for runtime validation
 - `p-retry` for retries

@@ -4,6 +4,21 @@
 
 ---
 
+## Current Implementation Override
+
+Architect onboarding now runs through the frontend/backend flow.
+
+Current identity rule:
+
+```text
+userId = authenticated owner user id
+telegramChatId = notification metadata only
+```
+
+When this file mentions Telegram multi-turn onboarding, implement the same conversation semantics through persisted frontend/API onboarding state. Telegram may remind or deep-link, but it is not the primary onboarding surface.
+
+---
+
 ## Agent Identity
 
 | Property | Value |

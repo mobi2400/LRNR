@@ -4,6 +4,22 @@
 
 ---
 
+## Current Implementation Override
+
+News Intelligence is Phase 3, not Phase 1.
+
+This file contains older Telegram-digest delivery examples. Current direction:
+
+```text
+News Intelligence writes digest items to the database.
+The frontend News Digest page is the primary reading surface.
+Telegram sends a short digest alert/deep link.
+```
+
+When this file says "delivered directly to Telegram," implement it as stored digest items plus optional Telegram notification summary.
+
+---
+
 ## Agent Identity
 
 | Property | Value |

@@ -52,6 +52,9 @@ Also read these Phase 1 implementation support files before coding:
 - `docs/32_PHASE_1_API_CONTRACT.md`
 - `docs/33_AGENT_ORCHESTRATION_ROUTES.md`
 - `docs/34_DEPLOYMENT_ENV_CHECKLIST.md`
+- `docs/35_PHASE_1_SUBPART_AGENT_PROMPTS.md`
+
+Before implementing any Phase 1 sub-part, read the matching prompt from `docs/35_PHASE_1_SUBPART_AGENT_PROMPTS.md`.
 
 For backend/schema work, also read:
 
@@ -116,12 +119,13 @@ When working from a phase implementation plan, especially `docs/30_PHASE_1_12_PA
 For every sub-part:
 
 1. Read the relevant docs before coding.
-2. Implement only the scope of that sub-part.
-3. Re-test the touched behavior.
-4. Cross-verify the implementation against the docs.
-5. Update docs if implementation reality changed.
-6. Check git status and review the diff.
-7. Commit the completed sub-part with a clear message.
+2. Read the matching sub-part prompt from `docs/35_PHASE_1_SUBPART_AGENT_PROMPTS.md`.
+3. Implement only the scope of that sub-part.
+4. Re-test the touched behavior.
+5. Cross-verify the implementation against the docs.
+6. Update docs if implementation reality changed.
+7. Check git status and review the diff.
+8. Commit the completed sub-part with a clear message.
 
 Do not move to the next sub-part while the current one has:
 

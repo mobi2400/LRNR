@@ -88,6 +88,7 @@ For each part:
 
 ```text
 read relevant docs
+  -> read matching prompt in docs/35_PHASE_1_SUBPART_AGENT_PROMPTS.md
   -> implement scoped changes
   -> run relevant tests/checks
   -> cross-check implementation against docs
@@ -103,6 +104,7 @@ This rule exists because LRNR has many moving pieces. If agents skip verificatio
 
 After every part, verify:
 
+- the matching sub-part prompt was read before implementation
 - the code still builds or typechecks where applicable
 - relevant unit/integration tests pass
 - the implementation matches the part's scope

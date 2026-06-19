@@ -228,3 +228,4 @@ For Phase 1 implementation, also load:
 | `32_PHASE_1_API_CONTRACT.md` | Phase 1 endpoint contracts |
 | `33_AGENT_ORCHESTRATION_ROUTES.md` | route/state-machine rules |
 | `34_DEPLOYMENT_ENV_CHECKLIST.md` | deployment, env, and smoke test checklist |
+| `35_PHASE_1_SUBPART_AGENT_PROMPTS.md` | copy-ready prompts for each Phase 1 sub-part |

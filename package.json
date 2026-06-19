@@ -14,7 +14,10 @@
     "typecheck": "tsc --noEmit",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
-    "check:env": "tsx scripts/check-env.ts"
+    "check:env": "tsx scripts/check-env.ts",
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:status": "tsx scripts/db-status.ts"
   },
   "dependencies": {
     "@mobasshirkhan/docguard": "^0.1.1-beta.2",
@@ -44,6 +47,7 @@
     "prettier": "^3.6.2",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "drizzle-kit": "^0.31.4"
   }
 }

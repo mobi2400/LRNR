@@ -12,7 +12,8 @@ Before starting any Phase 1 sub-part:
 2. Read `docs/30_PHASE_1_12_PART_IMPLEMENTATION_PLAN.md`.
 3. Read the relevant sub-part prompt below.
 4. Execute only that sub-part.
-5. Test, cross-check docs, update docs if needed, then commit.
+5. Keep documenting your work and add helpful comments for non-obvious implementation decisions.
+6. Test, cross-check docs, update docs if needed, then commit.
 
 Every prompt assumes:
 
@@ -22,6 +23,8 @@ Telegram is alerts/deep links only.
 Backend owns sensitive logic.
 PostgreSQL is source of truth.
 Redis is temporary acceleration.
+Document important implementation decisions.
+Add helpful comments for code that the owner will need to understand later.
 ```
 
 ---

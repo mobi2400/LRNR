@@ -101,6 +101,8 @@ For agent-specific work, read the relevant agent file:
 - Keep code readable before clever.
 - Keep functions small and named by intent.
 - Add useful comments for non-obvious logic.
+- Add relevant comments that help the owner understand important code decisions.
+- Keep documenting work as implementation progresses.
 - Do not comment obvious assignments.
 - Separate business logic from side effects.
 - Agents must not call raw provider SDKs directly.
@@ -453,6 +455,21 @@ When implementing a module, document:
 - important state transitions
 - error behavior
 - retry/idempotency behavior
+- why important tradeoffs were chosen
+- how the owner can understand or debug the module later
+
+Documentation and comments should teach the owner while preserving code clarity.
+
+Add comments for:
+
+- non-obvious business rules
+- tricky state transitions
+- security/auth decisions
+- RAG retrieval decisions
+- idempotency and retry behavior
+- external provider failure handling
+
+Do not add comments for obvious assignments or simple syntax.
 
 If implementation changes architecture, update the relevant markdown doc in the same pull request/commit.
 

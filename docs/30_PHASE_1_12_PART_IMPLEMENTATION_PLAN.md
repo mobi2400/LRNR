@@ -50,6 +50,8 @@ These rules apply to every part.
 - Every mutation that may retry should be idempotent.
 - Every external call should have timeout, retry, and structured logging.
 - Every user-visible error should be safe and understandable.
+- Keep documenting implementation decisions as work progresses.
+- Add helpful comments for non-obvious code so the owner can learn from the implementation.
 - Use hybrid routing: keep dependent agent steps sequential, but run independent reads/fetches/checks in parallel with explicit fan-in.
 
 ### Hybrid Routing In Phase 1
@@ -111,6 +113,7 @@ After every part, verify:
 - the implementation still follows `AGENTS.md`
 - the implementation still follows `docs/00_AI_CODING_GUIDELINES.md`
 - schema/API/RAG/auth behavior still matches the relevant docs
+- relevant docs/comments were added for non-obvious implementation decisions
 - no secrets were added
 - no unrelated files were changed accidentally
 - git diff is reviewed before committing

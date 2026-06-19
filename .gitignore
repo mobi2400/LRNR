@@ -1,1 +1,11 @@
 /handbook
+node_modules
+.next
+.pnpm-store
+coverage
+.env
+.env.local
+.env.*.local
+dist
+*.log
+*.tsbuildinfo

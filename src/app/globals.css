@@ -1,10 +1,16 @@
 :root {
   color-scheme: light;
-  --background: #f4efe6;
-  --foreground: #1f2328;
-  --muted: #72685c;
-  --card: rgba(255, 251, 245, 0.9);
-  --border: rgba(77, 61, 42, 0.14);
+  --background: #f2ede4;
+  --surface: rgba(255, 252, 247, 0.88);
+  --surface-strong: #fffaf2;
+  --foreground: #1d2430;
+  --muted: #6e665d;
+  --border: rgba(66, 53, 39, 0.14);
+  --accent: #0d5b52;
+  --accent-strong: #0a463f;
+  --accent-soft: rgba(13, 91, 82, 0.12);
+  --danger: #9e3d2e;
+  --shadow: 0 24px 80px rgba(45, 34, 20, 0.1);
 }
 
 * {
@@ -19,17 +25,24 @@ body {
 
 body {
   background:
-    radial-gradient(circle at top, rgba(225, 198, 156, 0.45), transparent 40%),
-    linear-gradient(180deg, #f8f3ec 0%, var(--background) 100%);
+    radial-gradient(circle at top left, rgba(195, 177, 140, 0.35), transparent 30%),
+    radial-gradient(circle at bottom right, rgba(118, 177, 167, 0.2), transparent 28%),
+    linear-gradient(180deg, #fbf7f0 0%, var(--background) 100%);
   color: var(--foreground);
   font-family: Georgia, 'Times New Roman', serif;
+}
+
+button,
+input {
+  font: inherit;
 }
 
 a {
   color: inherit;
 }
 
-.foundation-shell {
+.auth-shell,
+.workspace-shell {
   display: flex;
   min-height: 100vh;
   align-items: center;
@@ -37,34 +50,170 @@ a {
   padding: 24px;
 }
 
-.foundation-card {
+.auth-card,
+.workspace-card {
   width: min(720px, 100%);
   border: 1px solid var(--border);
-  border-radius: 24px;
-  background: var(--card);
+  border-radius: 28px;
+  background: var(--surface);
   padding: 32px;
-  box-shadow: 0 24px 80px rgba(55, 36, 20, 0.08);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
 }
 
-.foundation-eyebrow {
+.auth-card--compact {
+  width: min(640px, 100%);
+}
+
+.auth-eyebrow {
   margin: 0 0 12px;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 0.83rem;
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 
-.foundation-card h1 {
-  margin: 0 0 16px;
-  font-size: clamp(2rem, 4vw, 3.5rem);
-  line-height: 1.05;
+.auth-card h1,
+.workspace-card h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3.4rem);
+  line-height: 1.04;
 }
 
-.foundation-card p {
-  margin: 0;
-  max-width: 54ch;
+.auth-copy,
+.workspace-copy {
+  margin: 16px 0 0;
+  max-width: 58ch;
   color: var(--muted);
   font-size: 1rem;
-  line-height: 1.7;
+  line-height: 1.75;
+}
+
+.auth-alert {
+  margin: 20px 0 0;
+  border: 1px solid rgba(158, 61, 46, 0.2);
+  border-radius: 18px;
+  background: rgba(158, 61, 46, 0.08);
+  color: var(--danger);
+  padding: 14px 16px;
+}
+
+.auth-form {
+  display: grid;
+  gap: 18px;
+  margin-top: 24px;
+}
+
+.auth-field {
+  display: grid;
+  gap: 10px;
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.auth-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-strong);
+  padding: 15px 16px;
+  color: var(--foreground);
+}
+
+.auth-input:focus {
+  outline: 2px solid transparent;
+  border-color: rgba(13, 91, 82, 0.45);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.auth-button,
+.workspace-button {
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #f8faf8;
+  cursor: pointer;
+  padding: 14px 20px;
+  transition:
+    transform 160ms ease,
+    background 160ms ease;
+}
+
+.auth-button:hover,
+.workspace-button:hover {
+  transform: translateY(-1px);
+  background: var(--accent-strong);
+}
+
+.auth-footnote,
+.auth-meta {
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 0.96rem;
+}
+
+.auth-link,
+.auth-link-button {
+  display: inline-flex;
+  margin-top: 18px;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.auth-link-button,
+.workspace-button--ghost {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.workspace-header {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 28px;
+}
+
+.workspace-grid div {
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.35);
+  padding: 18px;
+}
+
+.workspace-grid dt {
+  color: var(--muted);
+  font-size: 0.86rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workspace-grid dd {
+  margin: 10px 0 0;
+  font-size: 1.04rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 720px) {
+  .auth-card,
+  .workspace-card {
+    padding: 24px;
+  }
+
+  .workspace-header {
+    flex-direction: column;
+  }
+
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
 }

@@ -8,11 +8,14 @@ function readString(value: unknown): string | null {
     : null;
 }
 
-function readSourceRefs(knowledgeBase: TopicKnowledgeBaseRecord): Array<{
+function readSourceRefs(
+  knowledgeBase: TopicKnowledgeBaseRecord,
+  session: CurriculumSession,
+): Array<{
   label: string;
   url: string;
 }> {
-  return knowledgeBase.sourceInventory
+  const inventorySources = knowledgeBase.sourceInventory
     .map((item) => {
       if (item === null || typeof item !== 'object' || Array.isArray(item)) {
         return null;
@@ -24,8 +27,16 @@ function readSourceRefs(knowledgeBase: TopicKnowledgeBaseRecord): Array<{
 
       return label !== null && url !== null ? { label, url } : null;
     })
-    .filter((source): source is { label: string; url: string } => source !== null)
-    .slice(0, 4);
+    .filter((source): source is { label: string; url: string } => source !== null);
+
+  if (inventorySources.length > 0) {
+    return inventorySources.slice(0, 4);
+  }
+
+  return session.sourceRefs.slice(0, 4).map((url, index) => ({
+    label: `Session source ${index + 1}`,
+    url,
+  }));
 }
 
 function findConceptTitle(
@@ -51,6 +62,31 @@ function findConceptTitle(
   return conceptSlug.replace(/-/g, ' ');
 }
 
+function buildCodeExamples(session: CurriculumSession, primaryConcept: string) {
+  return session.examplesPlan.map((plan, index) => ({
+    title:
+      index === 0
+        ? `${primaryConcept} practice scaffold`
+        : `Practice scaffold ${index + 1}`,
+    language: 'ts',
+    code: `type LearningCheckpoint = {\n  concept: string;\n  canExplainTradeoff: boolean;\n};`,
+    explanation: plan,
+  }));
+}
+
+function buildReviewQuestions(session: CurriculumSession) {
+  return session.reviewQuestions.map((question, index) => ({
+    id: `${session.id}:review-${index + 1}`,
+    question,
+    expectedPoints: [
+      'Names the core purpose',
+      'Connects it to the larger workflow',
+      'Mentions one failure mode or tradeoff',
+    ],
+    hint: 'Answer as if you were teaching someone one day behind you.',
+  }));
+}
+
 export function createLessonPayload(input: {
   topicSlug: string;
   session: CurriculumSession;
@@ -60,62 +96,28 @@ export function createLessonPayload(input: {
     findConceptTitle(input.knowledgeBase, conceptSlug),
   );
   const primaryConcept = conceptTitles[0] ?? input.session.title;
-  const sourceReferences = readSourceRefs(input.knowledgeBase);
+  const sourceReferences = readSourceRefs(input.knowledgeBase, input.session);
 
   return lessonPayloadSchema.parse({
     sessionId: input.session.id,
     topicSlug: input.topicSlug,
     title: input.session.title,
     objective: input.session.masteryObjective,
-    mentalModel: `${primaryConcept} is easiest to learn as a moving part in the full ${input.topicSlug} workflow, not as an isolated definition.`,
-    explanation: [
-      {
-        heading: 'Core idea',
-        body: `Today focuses on ${conceptTitles.join(', ')}. Start by naming what the concept controls, what inputs it needs, and what can go wrong when it is missing.`,
-      },
-      {
-        heading: 'How to reason about it',
-        body: input.session.connectionToPrior ?? 'This is the first session, so use it to build the vocabulary for later tradeoffs.',
-      },
-    ],
+    mentalModel: input.session.mentalModel,
+    explanation: input.session.explanationPlan.map((body, index) => ({
+      heading: index === 0 ? 'Core idea' : `Plan step ${index + 1}`,
+      body,
+    })),
     diagram: {
       type: 'mermaid',
       content: `flowchart LR\n  A[Goal] --> B[${primaryConcept}]\n  B --> C[Practice]\n  C --> D[Review]`,
     },
-    codeExamples: [
-      {
-        title: `${primaryConcept} practice scaffold`,
-        language: 'ts',
-        code: `type LearningCheckpoint = {\n  concept: string;\n  canExplainTradeoff: boolean;\n};`,
-        explanation:
-          'Use a small typed checkpoint to force the idea into a concrete, testable shape.',
-      },
-    ],
+    codeExamples: buildCodeExamples(input.session, primaryConcept),
     commonMistakes: [
       `Treating ${primaryConcept} as a memorized term instead of a decision point.`,
       'Skipping the review question before the mental model feels usable.',
     ],
-    reviewQuestions: [
-      {
-        id: `${input.session.id}:explain`,
-        question: `Explain ${primaryConcept} in your own words without using the lesson text.`,
-        expectedPoints: [
-          'Names the core purpose',
-          'Connects it to the larger workflow',
-          'Mentions one failure mode or tradeoff',
-        ],
-        hint: 'Answer as if you were teaching someone one day behind you.',
-      },
-      {
-        id: `${input.session.id}:apply`,
-        question: `Where would ${primaryConcept} show up in a real project?`,
-        expectedPoints: [
-          'Gives a concrete scenario',
-          'Explains why the concept matters there',
-        ],
-        hint: 'Use a small system or feature you can picture clearly.',
-      },
-    ],
+    reviewQuestions: buildReviewQuestions(input.session),
     sourceReferences,
     nextAction:
       input.session.tomorrowPreview ??

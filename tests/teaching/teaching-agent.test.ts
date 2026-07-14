@@ -71,6 +71,26 @@ describe('teaching agent', () => {
     expect(lesson.sourceReferences[0]?.url).toContain('lrnr://topic-briefs');
   });
 
+
+  it('uses the persisted session plan and session source refs when building lessons', () => {
+    const lesson = createLessonPayload({
+      topicSlug: 'agentic-ai-foundations',
+      session,
+      knowledgeBase: {
+        ...knowledgeBase,
+        sourceInventory: [],
+      },
+    });
+
+    expect(lesson.mentalModel).toBe(session.mentalModel);
+    expect(lesson.explanation[0]?.body).toBe(session.explanationPlan[0]);
+    expect(lesson.codeExamples[0]?.explanation).toBe(session.examplesPlan[0]);
+    expect(lesson.reviewQuestions[0]?.question).toBe(session.reviewQuestions[0]);
+    expect(lesson.sourceReferences[0]).toEqual({
+      label: 'Session source 1',
+      url: 'lrnr://source',
+    });
+  });
   it('creates a compact RAG summary instead of raw lesson text', () => {
     const lesson = createLessonPayload({
       topicSlug: 'agentic-ai-foundations',

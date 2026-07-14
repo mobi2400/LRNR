@@ -12,6 +12,7 @@ import {
   requireMutationRow,
 } from '@/db/repository-helpers';
 import type { ApiIdempotencyKeyRow } from '@/db/types';
+import { incrementMetric } from '@/server/metrics';
 
 export const apiIdempotencyStatusSchema = z.enum([
   'processing',
@@ -110,6 +111,8 @@ export function createApiIdempotencyRepository(database: DbClient = db) {
         .returning();
 
       if (insertedRow !== undefined) {
+        incrementMetric('idempotency_reservation_total', { result: 'success' });
+
         return {
           reserved: true,
           record: parseApiIdempotencyRow(insertedRow),
@@ -125,6 +128,10 @@ export function createApiIdempotencyRepository(database: DbClient = db) {
       }
 
       if (existing.expiresAt > now) {
+        incrementMetric('idempotency_reservation_total', {
+          result: existing.status === 'completed' ? 'replay' : existing.status,
+        });
+
         return {
           reserved: false,
           record: existing,
@@ -152,11 +159,15 @@ export function createApiIdempotencyRepository(database: DbClient = db) {
         .returning();
 
       if (reclaimedRow === undefined) {
+        incrementMetric('idempotency_reservation_total', { result: 'in_progress' });
+
         return {
           reserved: false,
           record: existing,
         };
       }
+
+      incrementMetric('idempotency_reservation_total', { result: 'expired_reclaimed' });
 
       return {
         reserved: true,
@@ -187,6 +198,8 @@ export function createApiIdempotencyRepository(database: DbClient = db) {
         )
         .returning();
 
+      incrementMetric('idempotency_completion_total', { result: 'completed' });
+
       return parseApiIdempotencyRow(
         requireMutationRow(row, 'Idempotency completion did not return a row.'),
       );
@@ -214,6 +227,10 @@ export function createApiIdempotencyRepository(database: DbClient = db) {
           ),
         )
         .returning();
+
+      incrementMetric('idempotency_completion_total', {
+        result: validatedInput.retryable ? 'failed_retryable' : 'failed_terminal',
+      });
 
       return parseApiIdempotencyRow(
         requireMutationRow(row, 'Idempotency failure write did not return a row.'),

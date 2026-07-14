@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { MemoryKeyValueStore } from '../../src/lib/redis';
@@ -8,8 +8,12 @@ import {
   getCachedJson,
   setCachedJson,
 } from '../../src/server/cache';
+import { getMetricsSnapshot, resetMetricsForTests } from '../../src/server/metrics';
 
 describe('cache helpers', () => {
+  beforeEach(() => {
+    resetMetricsForTests();
+  });
   it('round-trips a versioned, validated cache value', async () => {
     const store = new MemoryKeyValueStore();
     const key = 'lrnr:v1:cache:test';
@@ -34,6 +38,15 @@ describe('cache helpers', () => {
       getCachedJson(store, key, z.object({ title: z.string() })),
     ).resolves.toBeNull();
     await expect(store.get(key)).resolves.toBeNull();
+    expect(getMetricsSnapshot().counters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'cache_l2_access_total',
+          labels: { kind: 'test', result: 'invalid_value' },
+          value: 1,
+        }),
+      ]),
+    );
   });
 
   it('scopes lesson and curriculum cache keys by revision', () => {

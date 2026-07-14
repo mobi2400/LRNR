@@ -14,6 +14,7 @@ import {
 } from '@/db/repository-helpers';
 import { AppError } from '@/server/errors';
 import type { DeliveryOutboxRow } from '@/db/types';
+import { incrementMetric, observeMetric } from '@/server/metrics';
 
 const outboxRecordSchema = z.object({
   id: z.string().uuid(),
@@ -89,6 +90,8 @@ export function createOutboxRepository(database: DbClient = db) {
         .returning();
 
       if (insertedRow !== undefined) {
+        incrementMetric('outbox_write_total', { result: 'created' });
+
         return parseOutboxRow(insertedRow);
       }
 
@@ -107,6 +110,8 @@ export function createOutboxRepository(database: DbClient = db) {
       if (existingRow === null) {
         throw new Error('Delivery outbox write conflicted but no existing row was found.');
       }
+
+      incrementMetric('outbox_write_total', { result: 'duplicate_suppressed' });
 
       return parseOutboxRow(existingRow);
     },
@@ -133,6 +138,8 @@ export function createOutboxRepository(database: DbClient = db) {
         const pendingRow = getOneOrNull(rows);
 
         if (pendingRow === null) {
+          incrementMetric('outbox_claim_total', { result: 'empty' });
+
           return null;
         }
 
@@ -150,6 +157,10 @@ export function createOutboxRepository(database: DbClient = db) {
             ),
           )
           .returning();
+
+        incrementMetric('outbox_claim_total', {
+          result: claimedRow === undefined ? 'conflict' : 'claimed',
+        });
 
         return claimedRow === undefined ? null : parseOutboxRow(claimedRow);
       });
@@ -197,6 +208,11 @@ export function createOutboxRepository(database: DbClient = db) {
         .orderBy(desc(deliveryOutbox.createdAt), desc(deliveryOutbox.id))
         .limit(validatedInput.limit);
 
+      observeMetric(
+        'outbox_pending_depth',
+        rows.filter((row) => row.status === 'pending').length,
+      );
+
       return rows.map(parseOutboxSummary);
     },
     async markSent(
@@ -227,6 +243,8 @@ export function createOutboxRepository(database: DbClient = db) {
           status: 404,
         });
       }
+
+      incrementMetric('outbox_send_total', { result: 'sent' });
 
       return parseOutboxRow(row);
     },
@@ -262,6 +280,8 @@ export function createOutboxRepository(database: DbClient = db) {
           status: 404,
         });
       }
+
+      incrementMetric('outbox_retry_total', { result: 'scheduled' });
 
       return parseOutboxRow(row);
     },

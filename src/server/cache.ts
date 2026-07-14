@@ -1,5 +1,10 @@
 import type { KeyValueStore } from '@/lib/redis';
 import { serverConfig } from '@/server/config';
+import {
+  incrementMetric,
+  observeDurationMs,
+  observeMetric,
+} from '@/server/metrics';
 import { assertServerOnly } from '@/utils/server-only';
 import { z } from 'zod';
 
@@ -20,6 +25,12 @@ export const CACHE_TTL_MS = {
   curriculumMap: 600000,
   workflowStatus: 15000,
 } as const;
+
+function cacheKindFromKey(key: string): string {
+  const [, kind = 'unknown'] = key.split(':cache:');
+
+  return kind.split(':')[0] ?? 'unknown';
+}
 
 export function buildDashboardCacheKey(userId: string): string {
   return `${CACHE_PREFIX}:dashboard:${userId}`;
@@ -50,20 +61,36 @@ export async function getCachedJson<T>(
   key: string,
   valueSchema: z.ZodType<T>,
 ): Promise<T | null> {
-  const rawValue = await store.get(key);
+  const kind = cacheKindFromKey(key);
+  const rawValue = await observeDurationMs('cache_l2_get_duration_ms', { kind }, () =>
+    store.get(key),
+  );
 
   if (rawValue === null) {
+    incrementMetric('cache_l2_access_total', { kind, result: 'miss' });
+
     return null;
   }
 
+  observeMetric('cache_payload_bytes', Buffer.byteLength(rawValue, 'utf8'), {
+    kind,
+  });
+
   try {
     const envelope = cacheEnvelopeSchema.parse(JSON.parse(rawValue));
+    const value = valueSchema.parse(envelope.value);
 
-    return valueSchema.parse(envelope.value);
+    incrementMetric('cache_l2_access_total', { kind, result: 'hit' });
+
+    return value;
   } catch {
-    // Cache corruption or a stale schema must not break an authoritative DB
-    // read. Delete the unusable entry and let the caller rebuild it.
-    await store.delete(key);
+    incrementMetric('cache_l2_access_total', { kind, result: 'invalid_value' });
+
+    try {
+      await store.delete(key);
+    } catch {
+      incrementMetric('cache_invalidation_total', { kind, result: 'failure' });
+    }
 
     return null;
   }
@@ -75,22 +102,39 @@ export async function setCachedJson(
   value: unknown,
   ttlMs: number,
 ): Promise<void> {
-  await store.set(
-    key,
-    JSON.stringify({
-      schemaVersion: CACHE_SCHEMA_VERSION,
-      cachedAt: new Date().toISOString(),
-      value,
-    }),
-    {
-      ttlMs,
-    },
-  );
+  const kind = cacheKindFromKey(key);
+  const payload = JSON.stringify({
+    schemaVersion: CACHE_SCHEMA_VERSION,
+    cachedAt: new Date().toISOString(),
+    value,
+  });
+
+  observeMetric('cache_payload_bytes', Buffer.byteLength(payload, 'utf8'), {
+    kind,
+  });
+
+  try {
+    await observeDurationMs('cache_fill_duration_ms', { kind }, () =>
+      store.set(key, payload, { ttlMs }),
+    );
+    incrementMetric('cache_l2_write_total', { kind, result: 'success' });
+  } catch (error) {
+    incrementMetric('cache_l2_write_total', { kind, result: 'error' });
+    throw error;
+  }
 }
 
 export async function clearCachedValue(
   store: KeyValueStore,
   key: string,
 ): Promise<void> {
-  await store.delete(key);
+  const kind = cacheKindFromKey(key);
+
+  try {
+    await store.delete(key);
+    incrementMetric('cache_invalidation_total', { kind, result: 'success' });
+  } catch (error) {
+    incrementMetric('cache_invalidation_total', { kind, result: 'failure' });
+    throw error;
+  }
 }

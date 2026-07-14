@@ -11,6 +11,7 @@ import {
   ragEventTypeSchema,
 } from '@/db/repository-helpers';
 import type { RagMemoryRow } from '@/db/types';
+import { incrementMetric, observeMetric } from '@/server/metrics';
 
 const ragMemorySummarySchema = z.object({
   id: z.string().uuid(),
@@ -386,6 +387,7 @@ export function createRagRepository(database: DbClient = db) {
     },
 
     async retrieveContext(actor: DbActor, input?: Partial<RagRetrievalInput>): Promise<RagRetrievalResult> {
+      const startedAt = performance.now();
       const validatedActor = assertDbActor(actor);
       const validatedInput = ragRetrievalInputSchema.parse(input ?? {});
       const baseConditions = buildActiveRagConditions(validatedActor.userId, {
@@ -454,6 +456,12 @@ export function createRagRepository(database: DbClient = db) {
       const items = [...merged.values()]
         .sort((left, right) => right.score - left.score || right.createdAt.getTime() - left.createdAt.getTime())
         .slice(0, validatedInput.finalLimit);
+
+      incrementMetric('rag_retrieval_total', { mode: validatedInput.queryEmbedding === undefined ? 'lexical' : 'hybrid' });
+      observeMetric('rag_lexical_candidate_count', lexicalRows.length);
+      observeMetric('rag_vector_candidate_count', vectorRows.length);
+      observeMetric('rag_final_context_count', items.length);
+      observeMetric('rag_retrieval_latency_ms', performance.now() - startedAt);
 
       return ragRetrievalResultSchema.parse({
         items,

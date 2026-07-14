@@ -93,6 +93,11 @@ describe('initial curriculum builder', () => {
     expect(plan.sessions[0]?.status).toBe('ready');
     expect(plan.sessions[1]?.status).toBe('planned');
     expect(plan.currentSessionId).toBe(plan.sessions[0]?.id);
+    expect(plan.sessions[0]?.prerequisites).toEqual([]);
+    expect(plan.sessions[0]?.mentalModel).toContain('Build grounded agent workflows');
+    expect(plan.sessions[0]?.explanationPlan.length).toBeGreaterThan(0);
+    expect(plan.sessions[0]?.examplesPlan.length).toBeGreaterThan(0);
+    expect(plan.sessions[0]?.reviewQuestions.length).toBeGreaterThan(0);
     expect(plan.sessions[2]?.evaluationDue).toBe(true);
   });
 });

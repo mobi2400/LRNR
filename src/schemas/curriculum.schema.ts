@@ -15,7 +15,23 @@ export const curriculumSessionSchema = z.object({
   status: z.enum(['planned', 'ready', 'delivered', 'completed', 'skipped', 'rescheduled']),
   phase: curriculumPhaseSchema,
   conceptsToCover: z.array(z.string().trim().min(1).max(255)).min(1).max(3),
+  prerequisites: z.array(z.string().trim().min(1).max(255)).default([]),
   masteryObjective: z.string().trim().min(1).max(1000),
+  mentalModel: z
+    .string()
+    .trim()
+    .min(1)
+    .max(1200)
+    .default('Build a usable mental model before moving to examples.'),
+  explanationPlan: z
+    .array(z.string().trim().min(1).max(1000))
+    .min(1)
+    .default(['Explain the core idea, then connect it to one concrete scenario.']),
+  examplesPlan: z.array(z.string().trim().min(1).max(1000)).default([]),
+  reviewQuestions: z
+    .array(z.string().trim().min(1).max(1000))
+    .min(1)
+    .default(['Explain the concept in your own words and name one tradeoff.']),
   sourceRefs: z.array(z.string().trim().min(1).max(2048)).default([]),
   connectionToPrior: z.string().trim().min(1).max(1000).nullable(),
   tomorrowPreview: z.string().trim().min(1).max(1000).nullable(),

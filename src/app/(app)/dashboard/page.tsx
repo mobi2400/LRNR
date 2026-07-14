@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 
 import { AppShell } from '@/components/app-shell/AppShell';
 import { OnboardingPanel } from '@/components/onboarding/OnboardingPanel';
+import { dashboardService } from '@/services/dashboard.service';
 import {
   assertUnlockedOwnerSession,
   clearSessionCookies,
@@ -20,6 +21,11 @@ export default async function DashboardPage(): Promise<JSX.Element> {
   const state = await getSessionAccessState();
 
   assertUnlockedOwnerSession(state);
+
+  const dashboard = await dashboardService.getDashboard({
+    userId: state.userId,
+    requestId: 'dashboard-page',
+  });
 
   return (
     <AppShell
@@ -54,24 +60,27 @@ export default async function DashboardPage(): Promise<JSX.Element> {
             </dl>
           </article>
           <article className="cockpit-panel">
-            <p className="cockpit-panel__label">Lesson Surfaces</p>
-            <h3>Protected pages are still ready while onboarding stays interactive</h3>
-            <p>
-              The workflow will hold off on curriculum and lesson generation until the
-              Architect has enough signal to hand off a real topic brief.
-            </p>
+            <p className="cockpit-panel__label">Learning State</p>
+            <h3>{dashboard.topic.currentTopicSlug ?? 'No active topic yet'}</h3>
+            <dl className="cockpit-definition-list">
+              <div><dt>Topic status</dt><dd>{dashboard.topic.topicStatus ?? 'not ready'}</dd></div>
+              <div><dt>Current session</dt><dd>{dashboard.topic.currentSession?.title ?? dashboard.topic.currentSessionId ?? 'none'}</dd></div>
+              <div><dt>Progress</dt><dd>{dashboard.topic.completedSessionCount} / {dashboard.topic.totalSessionCount}</dd></div>
+              <div><dt>Cache</dt><dd>{dashboard.cache.status}</dd></div>
+            </dl>
             <div className="cockpit-chip-row">
               <a className="workspace-button" href="/lesson/current">Current lesson</a>
               <a className="workspace-button workspace-button--secondary" href="/lesson/review">Lesson review</a>
             </div>
           </article>
           <article className="cockpit-panel">
-            <p className="cockpit-panel__label">Curriculum</p>
-            <h3>Next phase handoff is staged, not rushed</h3>
-            <p>
-              Part 8 stops after Architect completion so Cartographer and Curriculum Builder
-              can start later from a typed topic brief instead of a vague goal.
-            </p>
+            <p className="cockpit-panel__label">Workflow</p>
+            <h3>{dashboard.latestWorkflow?.jobType ?? 'No workflow runs yet'}</h3>
+            <dl className="cockpit-definition-list">
+              <div><dt>Status</dt><dd>{dashboard.latestWorkflow?.status ?? 'idle'}</dd></div>
+              <div><dt>Alerts</dt><dd>{dashboard.alerts.length} recent delivery rows</dd></div>
+              <div><dt>Revision</dt><dd>{dashboard.topic.curriculumRevision ?? 'none'}</dd></div>
+            </dl>
           </article>
         </div>
       </section>

@@ -1,5 +1,6 @@
 import { readUnlockToken } from '@/server/access-secret';
 import { serverConfig } from '@/server/config';
+import { AppError } from '@/server/errors';
 import { assertOwnerIdentity } from '@/server/owner';
 import { assertServerOnly } from '@/utils/server-only';
 
@@ -25,14 +26,18 @@ export interface SessionAccessState {
   accessMode: AccessMode;
 }
 
-export class SessionAccessError extends Error {
+export class SessionAccessError extends AppError {
   readonly code: 'UNAUTHENTICATED' | 'FORBIDDEN' | 'LOCKED';
 
   constructor(
     code: 'UNAUTHENTICATED' | 'FORBIDDEN' | 'LOCKED',
     message: string,
   ) {
-    super(message);
+    super({
+      code,
+      message,
+      status: code === 'UNAUTHENTICATED' ? 401 : code === 'FORBIDDEN' ? 403 : 423,
+    });
     this.name = 'SessionAccessError';
     this.code = code;
   }

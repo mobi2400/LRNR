@@ -1,3 +1,4 @@
+import { AppError } from '@/server/errors';
 import { serverConfig } from '@/server/config';
 import { assertServerOnly } from '@/utils/server-only';
 
@@ -13,11 +14,15 @@ export interface OwnerConfig {
   email: string | null;
 }
 
-export class OwnerAccessError extends Error {
+export class OwnerAccessError extends AppError {
   readonly code = 'FORBIDDEN';
 
   constructor(message = 'LRNR is private to the configured owner.') {
-    super(message);
+    super({
+      code: 'FORBIDDEN',
+      message,
+      status: 403,
+    });
     this.name = 'OwnerAccessError';
   }
 }

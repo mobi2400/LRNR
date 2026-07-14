@@ -45,6 +45,7 @@ export async function getSessionAccessState(): Promise<SessionAccessState> {
 export async function unlockOwnerSession(accessSecret: string): Promise<{
   isUnlocked: true;
   unlockedUntil: string;
+  userId: string;
 }> {
   const state = await getSessionAccessState();
 
@@ -82,6 +83,7 @@ export async function unlockOwnerSession(accessSecret: string): Promise<{
   return {
     isUnlocked: true,
     unlockedUntil: expiresAt.toISOString(),
+    userId: state.userId,
   };
 }
 

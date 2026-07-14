@@ -1,37 +1,38 @@
-import { randomUUID } from 'node:crypto';
-
-import { NextResponse } from 'next/server';
-
 import { getSessionAccessState } from '@/server/session';
+import { AppError } from '@/server/errors';
+import { createRequestContext, withRequestUser } from '@/server/request-context';
+import {
+  handleRouteError,
+  successResponse,
+} from '@/server/response';
 
-export async function GET(): Promise<Response> {
-  const requestId = randomUUID();
-  const state = await getSessionAccessState();
+export async function GET(request: Request): Promise<Response> {
+  const context = createRequestContext(request);
 
-  if (!state.isAuthenticated || state.userId === null || state.email === null) {
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: {
-          code: 'UNAUTHENTICATED',
-          message: 'Sign in to continue.',
-        },
-      },
-      { status: 401 },
-    );
-  }
+  try {
+    const state = await getSessionAccessState();
 
-  return NextResponse.json({
-    ok: true,
-    requestId,
-    data: {
+    if (
+      !state.isAuthenticated ||
+      state.userId === null ||
+      state.email === null
+    ) {
+      throw new AppError({
+        code: 'UNAUTHENTICATED',
+        message: 'Sign in to continue.',
+        status: 401,
+      });
+    }
+
+    return successResponse(withRequestUser(context, state.userId), {
       id: state.userId,
       email: state.email,
       displayName: state.displayName,
       isOwner: state.isOwner,
       isUnlocked: state.isUnlocked,
       accessMode: state.accessMode,
-    },
-  });
+    });
+  } catch (error) {
+    return handleRouteError(context, error);
+  }
 }

@@ -1,34 +1,31 @@
-import { randomUUID } from 'node:crypto';
-
-import { NextResponse } from 'next/server';
-
 import { clearSessionCookies, getSessionAccessState } from '@/server/session';
+import { AppError } from '@/server/errors';
+import { createRequestContext, withRequestUser } from '@/server/request-context';
+import {
+  handleRouteError,
+  successResponse,
+} from '@/server/response';
 
-export async function POST(): Promise<Response> {
-  const requestId = randomUUID();
-  const state = await getSessionAccessState();
+export async function POST(request: Request): Promise<Response> {
+  const context = createRequestContext(request);
 
-  if (!state.isAuthenticated) {
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: {
-          code: 'UNAUTHENTICATED',
-          message: 'Sign in to continue.',
-        },
-      },
-      { status: 401 },
-    );
-  }
+  try {
+    const state = await getSessionAccessState();
 
-  await clearSessionCookies();
+    if (!state.isAuthenticated) {
+      throw new AppError({
+        code: 'UNAUTHENTICATED',
+        message: 'Sign in to continue.',
+        status: 401,
+      });
+    }
 
-  return NextResponse.json({
-    ok: true,
-    requestId,
-    data: {
+    await clearSessionCookies();
+
+    return successResponse(withRequestUser(context, state.userId), {
       loggedOut: true,
-    },
-  });
+    });
+  } catch (error) {
+    return handleRouteError(context, error);
+  }
 }

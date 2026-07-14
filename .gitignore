@@ -4,6 +4,7 @@ node_modules
 .pnpm-store
 .cache
 coverage
+.codebase-memory
 .env
 .env.local
 .env.*.local

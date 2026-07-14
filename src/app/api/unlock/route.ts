@@ -1,60 +1,34 @@
-import { randomUUID } from 'node:crypto';
-
-import { NextResponse } from 'next/server';
-
 import { unlockRequestSchema } from '@/schemas/auth.schema';
-import { SessionAccessError, unlockOwnerSession } from '@/server/session';
+import {
+  createRequestContext,
+  withRequestUser,
+} from '@/server/request-context';
+import {
+  handleRouteError,
+  successResponse,
+} from '@/server/response';
+import { unlockOwnerSession } from '@/server/session';
+import { parseJsonBody } from '@/server/validation';
 
 export async function POST(request: Request): Promise<Response> {
-  const requestId = randomUUID();
-  const rawBody = await request.json().catch(() => null);
-  const parsedBody = unlockRequestSchema.safeParse(rawBody);
-
-  if (!parsedBody.success) {
-    return NextResponse.json(
-      {
-        ok: false,
-        requestId,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Unlock request is invalid.',
-          details: parsedBody.error.flatten(),
-        },
-      },
-      { status: 400 },
-    );
-  }
+  const context = createRequestContext(request);
 
   try {
-    const result = await unlockOwnerSession(parsedBody.data.accessSecret);
+    const parsedBody = await parseJsonBody(
+      request,
+      unlockRequestSchema,
+      'Unlock request is invalid.',
+    );
+    const result = await unlockOwnerSession(parsedBody.accessSecret);
 
-    return NextResponse.json({
-      ok: true,
-      requestId,
-      data: result,
-    });
+    return successResponse(
+      withRequestUser(context, result.userId),
+      {
+        isUnlocked: result.isUnlocked,
+        unlockedUntil: result.unlockedUntil,
+      },
+    );
   } catch (error) {
-    if (error instanceof SessionAccessError) {
-      const status =
-        error.code === 'UNAUTHENTICATED'
-          ? 401
-          : error.code === 'FORBIDDEN'
-            ? 403
-            : 423;
-
-      return NextResponse.json(
-        {
-          ok: false,
-          requestId,
-          error: {
-            code: error.code,
-            message: error.message,
-          },
-        },
-        { status },
-      );
-    }
-
-    throw error;
+    return handleRouteError(context, error);
   }
 }

@@ -65,6 +65,12 @@ const currentSessionPointerSchema = z.object({
   sessionId: z.string().trim().min(1),
   sessionIndex: z.number().int().min(0),
 });
+const lessonCompletionUpdateSchema = z.object({
+  sessionId: z.string().trim().min(1),
+  expectedRevision: z.number().int().positive(),
+  nextSessionId: z.string().trim().min(1).nullable(),
+  nextSessionIndex: z.number().int().min(0),
+});
 
 export type CurriculumStateRecord = z.infer<typeof curriculumStateRecordSchema>;
 export type UpsertCurriculumStateInput = z.infer<
@@ -147,6 +153,32 @@ export function applyLessonToSession(
  * stored inside the validated JSON array so later agents do not patch anonymous
  * blobs from random services.
  */
+
+export interface LessonCompletionPatchInput {
+  sessions: CurriculumSessionDocument[];
+  sessionId: string;
+  nextSessionId: string | null;
+  nextSessionIndex: number;
+}
+
+export interface LessonCompletionPatch {
+  layer2Sessions: CurriculumSessionDocument[];
+  currentSessionId: string | null;
+  currentSessionIndex: number;
+}
+
+export function buildLessonCompletionPatch(
+  input: LessonCompletionPatchInput,
+): LessonCompletionPatch {
+  return {
+    layer2Sessions: applySessionStatusUpdate(input.sessions, {
+      sessionId: input.sessionId,
+      status: 'completed',
+    }),
+    currentSessionId: input.nextSessionId,
+    currentSessionIndex: input.nextSessionIndex,
+  };
+}
 export function createCurriculumRepository(database: DbClient = db) {
   return {
     async createCurriculum(
@@ -262,6 +294,70 @@ export function createCurriculumRepository(database: DbClient = db) {
       );
     },
 
+    async completeSessionAndAdvancePointer(
+      actor: DbActor,
+      topicSlug: string,
+      input: z.infer<typeof lessonCompletionUpdateSchema>,
+    ): Promise<CurriculumStateRecord> {
+      const validatedActor = assertDbActor(actor);
+      const validatedTopicSlug = z.string().trim().min(1).parse(topicSlug);
+      const validatedInput = lessonCompletionUpdateSchema.parse(input);
+      const currentState = requireRow(
+        await this.getActiveCurriculum(validatedActor, validatedTopicSlug),
+        'Active curriculum not found for the current topic.',
+        { topicSlug: validatedTopicSlug },
+      );
+
+      if (currentState.revision !== validatedInput.expectedRevision) {
+        throw new AppError({
+          code: 'CONFLICT',
+          message: 'Curriculum changed before lesson completion could be saved.',
+          status: 409,
+          details: {
+            expectedRevision: validatedInput.expectedRevision,
+            actualRevision: currentState.revision,
+          },
+        });
+      }
+
+      const parsedSessions = parseSessionDocuments(currentState.layer2Sessions);
+      const completionPatch = buildLessonCompletionPatch({
+        sessions: parsedSessions,
+        sessionId: validatedInput.sessionId,
+        nextSessionId: validatedInput.nextSessionId,
+        nextSessionIndex: validatedInput.nextSessionIndex,
+      });
+      const [row] = await database
+        .update(curriculumState)
+        .set({
+          layer2Sessions: completionPatch.layer2Sessions,
+          currentSessionId: completionPatch.currentSessionId,
+          currentSessionIndex: completionPatch.currentSessionIndex,
+          revision: currentState.revision + 1,
+          ...buildUpdatedAtPatch(),
+        })
+        .where(
+          and(
+            eq(curriculumState.id, currentState.id),
+            eq(curriculumState.userId, validatedActor.userId),
+            eq(curriculumState.revision, validatedInput.expectedRevision),
+          ),
+        )
+        .returning();
+
+      if (row === undefined) {
+        throw new AppError({
+          code: 'CONFLICT',
+          message: 'Curriculum revision conflict while completing lesson.',
+          status: 409,
+          details: {
+            expectedRevision: validatedInput.expectedRevision,
+          },
+        });
+      }
+
+      return parseCurriculumRow(row);
+    },
     async updateCurrentSessionPointer(
       actor: DbActor,
       topicSlug: string,

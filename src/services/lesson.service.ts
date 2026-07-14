@@ -1,13 +1,21 @@
-import { apiIdempotencyRepository } from '@/db/api-idempotency.repo';
-import { curriculumRepository } from '@/db/curriculum.repo';
+import {
+  apiIdempotencyRepository,
+  createApiIdempotencyRepository,
+} from '@/db/api-idempotency.repo';
+import { db, type DbClient } from '@/db/client';
+import {
+  createCurriculumRepository,
+  curriculumRepository,
+} from '@/db/curriculum.repo';
 import { knowledgeRepository } from '@/db/knowledge.repo';
 import { profileRepository } from '@/db/profile.repo';
-import { ragRepository } from '@/db/rag.repo';
+import { createRagRepository, ragRepository } from '@/db/rag.repo';
 import { type DbActor, requireRow } from '@/db/repository-helpers';
 import {
   createCompactSessionSummary,
   createLessonPayload,
 } from '@/agents/teaching/teaching-agent';
+import { curriculumSessionSchema, type CurriculumSession } from '@/schemas/curriculum.schema';
 import {
   currentLessonResponseSchema,
   followUpResponseSchema,
@@ -18,7 +26,6 @@ import {
   type LessonPayload,
   type MarkLessonCompleteResponse,
 } from '@/schemas/lesson.schema';
-import { curriculumSessionSchema, type CurriculumSession } from '@/schemas/curriculum.schema';
 import { AppError } from '@/server/errors';
 import { assertIdempotencyReplay, type AnyApiEnvelope } from '@/server/idempotency';
 
@@ -89,6 +96,7 @@ export async function generateAndPersistCurrentLesson(
     });
   }
 
+  const topicSlug = profile.currentTopicSlug;
   const currentSession = requireRow(
     getCurrentSession(curriculum.layer2Sessions, curriculum.currentSessionId),
     'Current curriculum session was not found.',
@@ -99,21 +107,21 @@ export async function generateAndPersistCurrentLesson(
   }
 
   const knowledgeBase = requireRow(
-    await knowledgeRepository.getByTopicSlug(actor, profile.currentTopicSlug),
+    await knowledgeRepository.getByTopicSlug(actor, topicSlug),
     'Topic knowledge base not found for lesson generation.',
-    { topicSlug: profile.currentTopicSlug },
+    { topicSlug },
   );
   const lesson = createLessonPayload({
-    topicSlug: profile.currentTopicSlug,
+    topicSlug,
     session: currentSession,
     knowledgeBase,
   });
 
-  await curriculumRepository.saveGeneratedLesson(actor, profile.currentTopicSlug, {
+  await curriculumRepository.saveGeneratedLesson(actor, topicSlug, {
     sessionId: currentSession.id,
     lesson,
   });
-  await curriculumRepository.updateSessionStatus(actor, profile.currentTopicSlug, {
+  await curriculumRepository.updateSessionStatus(actor, topicSlug, {
     sessionId: currentSession.id,
     status: 'delivered',
     deliveredAt: new Date(),
@@ -203,6 +211,7 @@ export async function markLessonComplete(
 
     return markLessonCompleteResponseSchema.parse(replay.data);
   }
+
   const { profile, curriculum } = await loadCurrentCurriculum(actor);
 
   if (profile === null || profile.currentTopicSlug === null || curriculum === null) {
@@ -213,6 +222,7 @@ export async function markLessonComplete(
     });
   }
 
+  const topicSlug = profile.currentTopicSlug;
   const currentSession = requireRow(
     getCurrentSession(curriculum.layer2Sessions, input.sessionId),
     'Lesson session was not found.',
@@ -225,59 +235,66 @@ export async function markLessonComplete(
     status: 'completed',
     ...(input.notes === undefined ? {} : { notes: input.notes }),
   });
+  const nextIndex =
+    nextSessionId === null
+      ? curriculum.currentSessionIndex
+      : Math.max(
+          curriculum.layer2Sessions.findIndex((session) => {
+            const parsed = curriculumSessionSchema.parse(session);
 
-  await curriculumRepository.updateSessionStatus(actor, profile.currentTopicSlug, {
-    sessionId: input.sessionId,
-    status: 'completed',
-  });
-
-  await ragRepository.writeSessionSummary(actor, {
-    topicSlug: profile.currentTopicSlug,
-    content: summary,
-    retrievalText: summary,
-    lexicalSearchText: summary,
-    sourceAgent: 'teaching_node',
-    metadata: {
-      sessionId: input.sessionId,
-      understood: input.understood,
-      summaryKind: 'lesson_completion',
-    },
-    idempotencyKey: `rag-session-summary:${actor.userId}:${input.sessionId}`,
-    confidence: 0.8,
-    isResolved: false,
-  });
-
-  if (nextSessionId !== null) {
-    const nextIndex = curriculum.layer2Sessions.findIndex((session) => {
-      const parsed = curriculumSessionSchema.parse(session);
-
-      return parsed.id === nextSessionId;
-    });
-
-    await curriculumRepository.updateCurrentSessionPointer(
-      actor,
-      profile.currentTopicSlug,
-      {
-        sessionId: nextSessionId,
-        sessionIndex: Math.max(nextIndex, 0),
-      },
-    );
-  }
-
+            return parsed.id === nextSessionId;
+          }),
+          0,
+        );
   const response = markLessonCompleteResponseSchema.parse({
     sessionId: input.sessionId,
     status: 'completed',
     nextSessionId,
   });
 
-  await apiIdempotencyRepository.completeResponse(actor, {
-    key: input.idempotencyKey,
-    response: {
-      ok: true,
-      requestId: actor.requestId ?? 'request',
-      data: response,
-    },
-    responseStatusCode: 200,
+  await db.transaction(async (transaction) => {
+    const tx = transaction as DbClient;
+    const transactionalCurriculumRepository = createCurriculumRepository(tx);
+    const transactionalRagRepository = createRagRepository(tx);
+    const transactionalIdempotencyRepository =
+      createApiIdempotencyRepository(tx);
+
+    await transactionalCurriculumRepository.completeSessionAndAdvancePointer(
+      actor,
+      topicSlug,
+      {
+        sessionId: input.sessionId,
+        expectedRevision: curriculum.revision,
+        nextSessionId,
+        nextSessionIndex: nextIndex,
+      },
+    );
+
+    await transactionalRagRepository.writeSessionSummary(actor, {
+      topicSlug,
+      content: summary,
+      retrievalText: summary,
+      lexicalSearchText: summary,
+      sourceAgent: 'teaching_node',
+      metadata: {
+        sessionId: input.sessionId,
+        understood: input.understood,
+        summaryKind: 'lesson_completion',
+      },
+      idempotencyKey: `rag-session-summary:${actor.userId}:${input.sessionId}`,
+      confidence: 0.8,
+      isResolved: false,
+    });
+
+    await transactionalIdempotencyRepository.completeResponse(actor, {
+      key: input.idempotencyKey,
+      response: {
+        ok: true,
+        requestId: actor.requestId ?? 'request',
+        data: response,
+      },
+      responseStatusCode: 200,
+    });
   });
 
   return response;

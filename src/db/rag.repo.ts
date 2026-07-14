@@ -142,6 +142,71 @@ export function createRagRepository(database: DbClient = db) {
       return existing;
     },
 
+    async writeMemories(
+      actor: DbActor,
+      inputs: RagMemoryWriteInput[],
+    ): Promise<RagMemoryRecord[]> {
+      const validatedActor = assertDbActor(actor);
+      const validatedInputs = z.array(ragMemoryWriteSchema).parse(inputs);
+
+      if (validatedInputs.length === 0) {
+        return [];
+      }
+
+      const insertedRows = await database
+        .insert(ragMemory)
+        .values(
+          validatedInputs.map((input) => ({
+            userId: validatedActor.userId,
+            ...input,
+            confidence: input.confidence.toFixed(4),
+            qualityScore:
+              input.qualityScore === undefined || input.qualityScore === null
+                ? null
+                : input.qualityScore.toFixed(4),
+          })),
+        )
+        .onConflictDoNothing()
+        .returning();
+
+      if (insertedRows.length === validatedInputs.length) {
+        return insertedRows.map(parseRagMemoryRow);
+      }
+
+      const records: RagMemoryRecord[] = insertedRows.map(parseRagMemoryRow);
+      const insertedKeys = new Set(
+        records
+          .map((record) => record.idempotencyKey)
+          .filter((key): key is string => key !== null),
+      );
+
+      for (const input of validatedInputs) {
+        if (input.idempotencyKey === undefined || input.idempotencyKey === null) {
+          throw new Error(
+            'Batched RAG write conflicted for a row without an idempotency key.',
+          );
+        }
+
+        if (insertedKeys.has(input.idempotencyKey)) {
+          continue;
+        }
+
+        const existing = await this.getByIdempotencyKey(
+          validatedActor,
+          input.idempotencyKey,
+        );
+
+        if (existing === null) {
+          throw new Error(
+            'Batched RAG write conflict occurred but no existing row could be loaded.',
+          );
+        }
+
+        records.push(existing);
+      }
+
+      return records;
+    },
     async writeOnboardingSeed(
       actor: DbActor,
       input: Omit<RagMemoryWriteInput, 'eventType'>,

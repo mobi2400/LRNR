@@ -3,12 +3,19 @@ import {
   buildOnboardingRagSeedPlan,
   createInitialOnboardingState,
 } from '@/agents/architect/architect-agent';
-import { apiIdempotencyRepository } from '@/db/api-idempotency.repo';
-import { jobsRepository } from '@/db/jobs.repo';
-import { profileRepository } from '@/db/profile.repo';
-import { ragRepository } from '@/db/rag.repo';
+import {
+  apiIdempotencyRepository,
+  createApiIdempotencyRepository,
+} from '@/db/api-idempotency.repo';
+import { db, type DbClient } from '@/db/client';
+import { createJobsRepository, jobsRepository } from '@/db/jobs.repo';
+import { createProfileRepository, profileRepository } from '@/db/profile.repo';
+import { createRagRepository } from '@/db/rag.repo';
 import { type DbActor, requireRow } from '@/db/repository-helpers';
-import { topicBriefsRepository } from '@/db/topic-briefs.repo';
+import {
+  createTopicBriefsRepository,
+  topicBriefsRepository,
+} from '@/db/topic-briefs.repo';
 import {
   assertIdempotencyReplay,
   type AnyApiEnvelope,
@@ -25,6 +32,9 @@ import {
   type OnboardingReplyRequest,
   type StartGoalRequest,
 } from '@/schemas/onboarding.schema';
+import type { RagMemoryWriteInput } from '@/db/rag.repo';
+import type { UpsertProfileInput } from '@/db/profile.repo';
+import type { UpsertTopicBriefInput } from '@/db/topic-briefs.repo';
 
 const ONBOARDING_JOB_TYPE = 'architect_onboarding';
 const IDEMPOTENCY_TTL_MS = 1000 * 60 * 60 * 24;
@@ -75,6 +85,74 @@ async function completeIdempotentRequest(
 
 function parseStateFromJob(jobOutput: unknown) {
   return architectOnboardingStateSchema.parse(jobOutput);
+}
+interface OnboardingCompletionPlan {
+  profileInput: UpsertProfileInput;
+  topicBriefInput: UpsertTopicBriefInput;
+  ragEntries: Array<Omit<RagMemoryWriteInput, 'sourceId'>>;
+  jobOutput: Record<string, unknown>;
+}
+
+export function buildOnboardingCompletionPlan(
+  actor: DbActor,
+  progress: ReturnType<typeof applyOnboardingAnswer> & {
+    completed: true;
+    completionSummary: NonNullable<ReturnType<typeof applyOnboardingAnswer>['completionSummary']>;
+  },
+): OnboardingCompletionPlan {
+  const topicSlug = progress.completionSummary.topicBlueprint.topicSlug;
+  const ragPlan = buildOnboardingRagSeedPlan(progress.state);
+
+  return {
+    profileInput: {
+      currentGoal: progress.state.goal,
+      currentTopicSlug: topicSlug,
+      learnerPreferences: {
+        preferredDepth: progress.state.preferredDepth,
+      },
+      stableMasterySummary: {
+        inferredBackground: progress.state.inferredBackground,
+        strengths: progress.state.detectedStrengths,
+        weakAreas: progress.state.detectedWeakAreas,
+      },
+      activeMisconceptions: progress.state.detectedMisconceptions,
+      lastActiveAt: new Date(),
+    },
+    topicBriefInput: {
+      topicSlug,
+      title: progress.completionSummary.topicBlueprint.title,
+      goal: progress.state.goal,
+      requiredDepth: progress.completionSummary.topicBlueprint.requiredDepth,
+      learnerContext: {
+        background: progress.state.background,
+        inferredBackground: progress.state.inferredBackground,
+        strengths: progress.state.detectedStrengths,
+        weakAreas: progress.state.detectedWeakAreas,
+        motivation: progress.completionSummary.motivation,
+        priorAttempts: progress.completionSummary.priorAttempts,
+      },
+      prerequisiteMap: progress.completionSummary.topicBlueprint.prerequisiteMap,
+      conceptOutline: progress.completionSummary.topicBlueprint.conceptOutline,
+      masteryIntent: {
+        preferredDepth: progress.state.preferredDepth,
+        dailyConstraint: progress.completionSummary.dailyConstraint,
+      },
+      sourceAgent: 'architect_node',
+    },
+    ragEntries: ragPlan.map((entry) => ({
+      topicSlug,
+      eventType: entry.eventType,
+      content: entry.content,
+      retrievalText: entry.content,
+      lexicalSearchText: entry.content,
+      sourceAgent: 'architect_node',
+      metadata: entry.metadata,
+      idempotencyKey: `rag-onboarding:${actor.userId}:${progress.state.onboardingId}:${entry.idempotencySuffix}`,
+      confidence: 0.8,
+      isResolved: false,
+    })),
+    jobOutput: progress.state as Record<string, unknown>,
+  };
 }
 
 export function createOnboardingService() {
@@ -246,97 +324,83 @@ export function createOnboardingService() {
         return envelope;
       }
 
-      const profile = await profileRepository.upsertProfile(actor, {
-        currentGoal: progress.state.goal,
-        currentTopicSlug: progress.completionSummary.topicBlueprint.topicSlug,
-        learnerPreferences: {
-          preferredDepth: progress.state.preferredDepth,
-        },
-        stableMasterySummary: {
-          inferredBackground: progress.state.inferredBackground,
-          strengths: progress.state.detectedStrengths,
-          weakAreas: progress.state.detectedWeakAreas,
-        },
-        activeMisconceptions: progress.state.detectedMisconceptions,
-        lastActiveAt: new Date(),
+      const completionPlan = buildOnboardingCompletionPlan(actor, {
+        ...progress,
+        completed: true,
+        completionSummary: progress.completionSummary,
       });
+      let topicBriefId: string | null = null;
 
-      const topicBrief = await topicBriefsRepository.createTopicBrief(actor, {
-        topicSlug: progress.completionSummary.topicBlueprint.topicSlug,
-        title: progress.completionSummary.topicBlueprint.title,
-        goal: progress.state.goal,
-        requiredDepth: progress.completionSummary.topicBlueprint.requiredDepth,
-        learnerContext: {
-          background: progress.state.background,
-          inferredBackground: progress.state.inferredBackground,
-          strengths: progress.state.detectedStrengths,
-          weakAreas: progress.state.detectedWeakAreas,
-          motivation: progress.completionSummary.motivation,
-          priorAttempts: progress.completionSummary.priorAttempts,
-          profileId: profile.id,
-        },
-        prerequisiteMap: progress.completionSummary.topicBlueprint.prerequisiteMap,
-        conceptOutline: progress.completionSummary.topicBlueprint.conceptOutline,
-        masteryIntent: {
-          preferredDepth: progress.state.preferredDepth,
-          dailyConstraint: progress.completionSummary.dailyConstraint,
-        },
-        sourceAgent: 'architect_node',
-      });
-
-      const ragPlan = buildOnboardingRagSeedPlan(progress.state);
-
-      for (const entry of ragPlan) {
-        if (entry.eventType === 'onboarding_response') {
-          await ragRepository.writeOnboardingSeed(actor, {
-            topicSlug: topicBrief.topicSlug,
-            content: entry.content,
-            retrievalText: entry.content,
-            lexicalSearchText: entry.content,
-            sourceAgent: 'architect_node',
-            sourceId: topicBrief.id,
-            metadata: entry.metadata,
-            idempotencyKey: `rag-onboarding:${actor.userId}:${progress.state.onboardingId}:${entry.idempotencySuffix}`,
-            confidence: 0.8,
-            isResolved: false,
+      await db.transaction(async (transaction) => {
+        const tx = transaction as DbClient;
+        const transactionalProfileRepository = createProfileRepository(tx);
+        const transactionalTopicBriefsRepository =
+          createTopicBriefsRepository(tx);
+        const transactionalRagRepository = createRagRepository(tx);
+        const transactionalJobsRepository = createJobsRepository(tx);
+        const transactionalIdempotencyRepository =
+          createApiIdempotencyRepository(tx);
+        const profile = await transactionalProfileRepository.upsertProfile(
+          actor,
+          completionPlan.profileInput,
+        );
+        const topicBrief =
+          await transactionalTopicBriefsRepository.createTopicBrief(actor, {
+            ...completionPlan.topicBriefInput,
+            learnerContext: {
+              ...completionPlan.topicBriefInput.learnerContext,
+              profileId: profile.id,
+            },
           });
 
-          continue;
-        }
+        topicBriefId = topicBrief.id;
 
-        await ragRepository.writeMemory(actor, {
-          topicSlug: topicBrief.topicSlug,
-          eventType: entry.eventType,
-          content: entry.content,
-          retrievalText: entry.content,
-          lexicalSearchText: entry.content,
-          sourceAgent: 'architect_node',
-          sourceId: topicBrief.id,
-          metadata: entry.metadata,
-          idempotencyKey: `rag-onboarding:${actor.userId}:${progress.state.onboardingId}:${entry.idempotencySuffix}`,
-          confidence: 0.8,
-          isResolved: false,
+        await transactionalRagRepository.writeMemories(
+          actor,
+          completionPlan.ragEntries.map((entry) => ({
+            ...entry,
+            sourceId: topicBrief.id,
+          })),
+        );
+
+        await transactionalJobsRepository.updateStatus(
+          actor,
+          validatedInput.onboardingId,
+          {
+            status: 'succeeded',
+            output: completionPlan.jobOutput,
+            finishedAt: new Date(),
+          },
+        );
+
+        const envelope = {
+          ok: true as const,
+          requestId: actor.requestId ?? 'request',
+          data: onboardingReplyResponseSchema.parse({
+            status: 'completed',
+            topicBriefId: topicBrief.id,
+          }),
+        };
+
+        await transactionalIdempotencyRepository.completeResponse(actor, {
+          key: idempotencyKey,
+          response: envelope as unknown as Record<string, unknown>,
+          responseStatusCode: 200,
         });
-      }
-
-      await jobsRepository.updateStatus(actor, validatedInput.onboardingId, {
-        status: 'succeeded',
-        output: progress.state as Record<string, unknown>,
-        finishedAt: new Date(),
       });
 
-      const envelope = {
+      if (topicBriefId === null) {
+        throw new Error('Onboarding completion transaction did not return a topic brief id.');
+      }
+
+      return {
         ok: true as const,
         requestId: actor.requestId ?? 'request',
         data: onboardingReplyResponseSchema.parse({
           status: 'completed',
-          topicBriefId: topicBrief.id,
+          topicBriefId,
         }),
       };
-
-      await completeIdempotentRequest(actor, idempotencyKey, envelope);
-
-      return envelope;
     },
   };
 }

@@ -1,3 +1,4 @@
+import { apiIdempotencyRepository } from '@/db/api-idempotency.repo';
 import {
   outboxRepository,
   type DeliveryOutboxRecord,
@@ -13,6 +14,7 @@ import {
   type TelegramDeliveryPayload,
   type TelegramProcessResult,
 } from '@/schemas/delivery.schema';
+import { assertIdempotencyReplay, type AnyApiEnvelope } from '@/server/idempotency';
 import { serverConfig } from '@/server/config';
 import { AppError } from '@/server/errors';
 import { assertServerOnly } from '@/utils/server-only';
@@ -20,6 +22,7 @@ import { assertServerOnly } from '@/utils/server-only';
 assertServerOnly('src/services/delivery.service.ts');
 
 const TELEGRAM_RETRY_DELAY_MS = 5 * 60 * 1000;
+const IDEMPOTENCY_TTL_MS = 1000 * 60 * 60 * 24;
 
 export interface LessonReadyAlertInput {
   sessionId: string;
@@ -86,7 +89,37 @@ export const deliveryService = {
   async queueTelegramTestAlert(
     actor: DbActor,
     idempotencyKey: string,
+    route: string,
+    requestHash: string,
   ): Promise<QueueTelegramTestAlertResponse> {
+    const reservation = await apiIdempotencyRepository.reserveProcessing(actor, {
+      key: idempotencyKey,
+      route,
+      requestHash,
+      expiresAt: new Date(Date.now() + IDEMPOTENCY_TTL_MS),
+    });
+
+    if (!reservation.reserved) {
+      const replay = assertIdempotencyReplay<AnyApiEnvelope>(
+        {
+          key: reservation.record.key,
+          route: reservation.record.route,
+          requestHash: reservation.record.requestHash,
+          response: reservation.record.response as AnyApiEnvelope | null,
+          statusCode: reservation.record.responseStatusCode,
+          status: reservation.record.status,
+        },
+        route,
+        requestHash,
+      );
+
+      if (!replay.ok) {
+        throw new Error(replay.error.message);
+      }
+
+      return queueTelegramTestAlertResponseSchema.parse(replay.data);
+    }
+
     const deliveryKey = buildTelegramTestDeliveryKey(actor, idempotencyKey);
     const record = await outboxRepository.createDeliveryItem(actor, {
       channel: 'telegram',
@@ -96,10 +129,22 @@ export const deliveryService = {
       nextAttemptAt: new Date(),
     });
 
-    return queueTelegramTestAlertResponseSchema.parse({
+    const response = queueTelegramTestAlertResponseSchema.parse({
       queued: isQueued(record),
       deliveryKey: record.deliveryKey,
     });
+
+    await apiIdempotencyRepository.completeResponse(actor, {
+      key: idempotencyKey,
+      response: {
+        ok: true,
+        requestId: actor.requestId ?? 'request',
+        data: response,
+      },
+      responseStatusCode: 200,
+    });
+
+    return response;
   },
 
   async queueLessonReadyAlert(

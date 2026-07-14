@@ -15,6 +15,13 @@
       "when": 1784065794754,
       "tag": "0001_left_steel_serpent",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784067418242,
+      "tag": "0002_sleepy_mongu",
+      "breakpoints": true
     }
   ]
 }

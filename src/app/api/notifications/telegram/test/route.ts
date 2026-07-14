@@ -1,5 +1,8 @@
 import { deliveryService } from '@/services/delivery.service';
-import { requireIdempotencyKey } from '@/server/idempotency';
+import {
+  hashIdempotencyRequest,
+  requireIdempotencyKey,
+} from '@/server/idempotency';
 import { createRequestContext, withRequestUser } from '@/server/request-context';
 import { handleRouteError, successResponse } from '@/server/response';
 import { getSessionAccessState } from '@/server/session';
@@ -15,12 +18,16 @@ export async function POST(request: Request): Promise<Response> {
 
     const userContext = withRequestUser(context, state.userId);
     const idempotencyKey = requireIdempotencyKey(request.headers);
+    const route = '/api/notifications/telegram/test';
+    const requestHash = hashIdempotencyRequest(route, {}, state.userId);
     const result = await deliveryService.queueTelegramTestAlert(
       {
         userId: state.userId,
         requestId: context.requestId,
       },
       idempotencyKey,
+      route,
+      requestHash,
     );
 
     return successResponse(userContext, result);

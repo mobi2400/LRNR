@@ -1,3 +1,4 @@
+import { apiIdempotencyRepository } from '@/db/api-idempotency.repo';
 import { curriculumRepository } from '@/db/curriculum.repo';
 import { knowledgeRepository } from '@/db/knowledge.repo';
 import { profileRepository } from '@/db/profile.repo';
@@ -19,6 +20,9 @@ import {
 } from '@/schemas/lesson.schema';
 import { curriculumSessionSchema, type CurriculumSession } from '@/schemas/curriculum.schema';
 import { AppError } from '@/server/errors';
+import { assertIdempotencyReplay, type AnyApiEnvelope } from '@/server/idempotency';
+
+const IDEMPOTENCY_TTL_MS = 1000 * 60 * 60 * 24;
 
 function getCurrentSession(
   sessions: unknown[],
@@ -167,8 +171,38 @@ export async function markLessonComplete(
     sessionId: string;
     understood: boolean;
     notes?: string;
+    idempotencyKey: string;
+    route: string;
+    requestHash: string;
   },
 ): Promise<MarkLessonCompleteResponse> {
+  const reservation = await apiIdempotencyRepository.reserveProcessing(actor, {
+    key: input.idempotencyKey,
+    route: input.route,
+    requestHash: input.requestHash,
+    expiresAt: new Date(Date.now() + IDEMPOTENCY_TTL_MS),
+  });
+
+  if (!reservation.reserved) {
+    const replay = assertIdempotencyReplay<AnyApiEnvelope>(
+      {
+        key: reservation.record.key,
+        route: reservation.record.route,
+        requestHash: reservation.record.requestHash,
+        response: reservation.record.response as AnyApiEnvelope | null,
+        statusCode: reservation.record.responseStatusCode,
+        status: reservation.record.status,
+      },
+      input.route,
+      input.requestHash,
+    );
+
+    if (!replay.ok) {
+      throw new Error(replay.error.message);
+    }
+
+    return markLessonCompleteResponseSchema.parse(replay.data);
+  }
   const { profile, curriculum } = await loadCurrentCurriculum(actor);
 
   if (profile === null || profile.currentTopicSlug === null || curriculum === null) {
@@ -230,11 +264,23 @@ export async function markLessonComplete(
     );
   }
 
-  return markLessonCompleteResponseSchema.parse({
+  const response = markLessonCompleteResponseSchema.parse({
     sessionId: input.sessionId,
     status: 'completed',
     nextSessionId,
   });
+
+  await apiIdempotencyRepository.completeResponse(actor, {
+    key: input.idempotencyKey,
+    response: {
+      ok: true,
+      requestId: actor.requestId ?? 'request',
+      data: response,
+    },
+    responseStatusCode: 200,
+  });
+
+  return response;
 }
 
 export async function answerLessonFollowUp(

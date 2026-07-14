@@ -11,6 +11,7 @@ export type ApiErrorCode =
   | 'CONFLICT'
   | 'RATE_LIMITED'
   | 'IDEMPOTENCY_CONFLICT'
+  | 'IDEMPOTENCY_IN_PROGRESS'
   | 'WORKFLOW_ALREADY_RUNNING'
   | 'PROVIDER_ERROR'
   | 'INTERNAL_ERROR';
@@ -76,6 +77,20 @@ export class IdempotencyConflictAppError extends AppError {
   }
 }
 
+
+export class IdempotencyInProgressAppError extends AppError {
+  readonly retryAfterSeconds: number;
+
+  constructor(message = 'A request with this idempotency key is still processing.') {
+    super({
+      code: 'IDEMPOTENCY_IN_PROGRESS',
+      message,
+      status: 409,
+    });
+    this.name = 'IdempotencyInProgressAppError';
+    this.retryAfterSeconds = 2;
+  }
+}
 export function isAppError(error: unknown): error is AppError {
   return error instanceof AppError;
 }

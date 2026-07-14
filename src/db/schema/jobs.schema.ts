@@ -1,5 +1,6 @@
 import {
   index,
+  integer,
   jsonb,
   text,
   timestamp,
@@ -58,7 +59,8 @@ export const apiIdempotencyKeys = table(
     route: text('route').notNull(),
     requestHash: text('request_hash').notNull(),
     response: jsonb('response'),
-    status: text('status').notNull(),
+    responseStatusCode: integer('response_status_code'),
+    status: text('status').default('processing').notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     createdAt: timestamps.createdAt,
     updatedAt: timestamps.updatedAt,
@@ -67,6 +69,9 @@ export const apiIdempotencyKeys = table(
     userKeyUnique: uniqueIndex('api_idempotency_keys_user_key_unique').on(
       table.userId,
       table.key,
+    ),
+    expiryLookup: index('api_idempotency_keys_expires_at_idx').on(
+      table.expiresAt,
     ),
   }),
 );

@@ -3,20 +3,28 @@ import { createHash } from 'node:crypto';
 import type { ApiFailure, ApiSuccess } from '@/server/response';
 import {
   IdempotencyConflictAppError,
-  ValidationAppError,
+  IdempotencyInProgressAppError,
 } from '@/server/errors';
+import { ValidationAppError } from '@/server/errors';
 import { assertServerOnly } from '@/utils/server-only';
 
 assertServerOnly('src/server/idempotency.ts');
 
 export const IDEMPOTENCY_HEADER = 'idempotency-key';
 
+export type IdempotencyReplayStatus =
+  | 'processing'
+  | 'completed'
+  | 'failed_retryable'
+  | 'failed_terminal';
+
 export interface IdempotencyRecord<TResponse> {
   key: string;
   route: string;
   requestHash: string;
-  response: TResponse;
-  statusCode: number;
+  response: TResponse | null;
+  statusCode: number | null;
+  status: IdempotencyReplayStatus;
 }
 
 function stableSerialize(value: unknown): string {
@@ -61,9 +69,10 @@ export function requireIdempotencyKey(headers: Headers): string {
 export function hashIdempotencyRequest(
   route: string,
   payload: unknown,
+  userId: string,
 ): string {
   return createHash('sha256')
-    .update(`${route}:${stableSerialize(payload)}`)
+    .update(`${userId}:${route}:${stableSerialize(payload)}`)
     .digest('hex');
 }
 
@@ -77,6 +86,20 @@ export function assertIdempotencyReplay<TResponse>(
       'Idempotency key was already used for a different request payload.',
       {
         route,
+      },
+    );
+  }
+
+  if (record.status === 'processing') {
+    throw new IdempotencyInProgressAppError();
+  }
+
+  if (record.status !== 'completed' || record.response === null) {
+    throw new IdempotencyConflictAppError(
+      'Previous idempotent request did not complete successfully.',
+      {
+        route,
+        status: record.status,
       },
     );
   }

@@ -26,7 +26,7 @@ export async function POST(request: Request): Promise<Response> {
     );
     const idempotencyKey = requireIdempotencyKey(request.headers);
     const route = '/api/onboarding/reply';
-    const requestHash = hashIdempotencyRequest(route, payload);
+    const requestHash = hashIdempotencyRequest(route, payload, state.userId);
     const result = await onboardingService.submitReply(
       {
         userId: state.userId,

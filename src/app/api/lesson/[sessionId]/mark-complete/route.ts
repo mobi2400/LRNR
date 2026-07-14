@@ -5,7 +5,10 @@ import { assertUnlockedOwnerSession } from '@/server/session-state';
 import { parseJsonBody } from '@/server/validation';
 import { markLessonComplete } from '@/services/lesson.service';
 import { markLessonCompleteRequestSchema } from '@/schemas/lesson.schema';
-import { requireIdempotencyKey } from '@/server/idempotency';
+import {
+  hashIdempotencyRequest,
+  requireIdempotencyKey,
+} from '@/server/idempotency';
 
 type RouteContext = {
   params: Promise<{
@@ -30,7 +33,9 @@ export async function POST(
       markLessonCompleteRequestSchema,
       'Lesson completion request is invalid.',
     );
-    requireIdempotencyKey(request.headers);
+    const idempotencyKey = requireIdempotencyKey(request.headers);
+    const route = '/api/lesson/' + params.sessionId + '/mark-complete';
+    const requestHash = hashIdempotencyRequest(route, payload, state.userId);
     const userContext = withRequestUser(context, state.userId);
     const result = await markLessonComplete(
       {
@@ -41,6 +46,9 @@ export async function POST(
         sessionId: params.sessionId,
         understood: payload.understood,
         ...(payload.notes === undefined ? {} : { notes: payload.notes }),
+        idempotencyKey,
+        requestHash,
+        route,
       },
     );
 

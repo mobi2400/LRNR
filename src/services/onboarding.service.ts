@@ -29,45 +29,47 @@ import {
 const ONBOARDING_JOB_TYPE = 'architect_onboarding';
 const IDEMPOTENCY_TTL_MS = 1000 * 60 * 60 * 24;
 
-async function getReplay<TResponse extends AnyApiEnvelope>(
+async function reserveIdempotentRequest<TResponse extends AnyApiEnvelope>(
   actor: DbActor,
   route: string,
   idempotencyKey: string,
   requestHash: string,
 ): Promise<TResponse | null> {
-  const existing = await apiIdempotencyRepository.getByKey(actor, idempotencyKey);
+  const reservation = await apiIdempotencyRepository.reserveProcessing(actor, {
+    key: idempotencyKey,
+    route,
+    requestHash,
+    expiresAt: new Date(Date.now() + IDEMPOTENCY_TTL_MS),
+  });
 
-  if (existing === null || existing.response === null) {
+  if (reservation.reserved) {
     return null;
   }
 
   return assertIdempotencyReplay(
     {
-      key: existing.key,
-      route: existing.route,
-      requestHash: existing.requestHash,
-      response: existing.response as TResponse,
-      statusCode: 200,
+      key: reservation.record.key,
+      route: reservation.record.route,
+      requestHash: reservation.record.requestHash,
+      response: reservation.record.response as TResponse | null,
+      statusCode: reservation.record.responseStatusCode,
+      status: reservation.record.status,
     },
     route,
     requestHash,
   );
 }
 
-async function saveReplay(
+async function completeIdempotentRequest(
   actor: DbActor,
-  route: string,
   idempotencyKey: string,
-  requestHash: string,
   response: AnyApiEnvelope,
+  statusCode = 200,
 ): Promise<void> {
-  await apiIdempotencyRepository.saveResponse(actor, {
+  await apiIdempotencyRepository.completeResponse(actor, {
     key: idempotencyKey,
-    route,
-    requestHash,
     response: response as unknown as Record<string, unknown>,
-    status: 'completed',
-    expiresAt: new Date(Date.now() + IDEMPOTENCY_TTL_MS),
+    responseStatusCode: statusCode,
   });
 }
 
@@ -110,7 +112,7 @@ export function createOnboardingService() {
       idempotencyKey: string,
       requestHash: string,
     ): Promise<AnyApiEnvelope> {
-      const replay = await getReplay<AnyApiEnvelope>(
+      const replay = await reserveIdempotentRequest<AnyApiEnvelope>(
         actor,
         route,
         idempotencyKey,
@@ -143,7 +145,7 @@ export function createOnboardingService() {
           }),
         };
 
-        await saveReplay(actor, route, idempotencyKey, requestHash, existingEnvelope);
+        await completeIdempotentRequest(actor, idempotencyKey, existingEnvelope);
 
         return existingEnvelope;
       }
@@ -185,7 +187,7 @@ export function createOnboardingService() {
         }),
       };
 
-      await saveReplay(actor, route, idempotencyKey, requestHash, envelope);
+      await completeIdempotentRequest(actor, idempotencyKey, envelope);
 
       return envelope;
     },
@@ -197,7 +199,7 @@ export function createOnboardingService() {
       idempotencyKey: string,
       requestHash: string,
     ): Promise<AnyApiEnvelope> {
-      const replay = await getReplay<AnyApiEnvelope>(
+      const replay = await reserveIdempotentRequest<AnyApiEnvelope>(
         actor,
         route,
         idempotencyKey,
@@ -239,7 +241,7 @@ export function createOnboardingService() {
           }),
         };
 
-        await saveReplay(actor, route, idempotencyKey, requestHash, envelope);
+        await completeIdempotentRequest(actor, idempotencyKey, envelope);
 
         return envelope;
       }
@@ -332,7 +334,7 @@ export function createOnboardingService() {
         }),
       };
 
-      await saveReplay(actor, route, idempotencyKey, requestHash, envelope);
+      await completeIdempotentRequest(actor, idempotencyKey, envelope);
 
       return envelope;
     },

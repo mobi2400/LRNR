@@ -15,6 +15,7 @@ import { assertServerOnly } from '@/utils/server-only';
 
 assertServerOnly('src/services/system-status.service.ts');
 
+const HEALTH_TIMEOUT_MS = 500;
 const PHASE_1_WORKFLOW_TYPES = [
   'architect_onboarding',
   'cartographer_mapping',
@@ -26,42 +27,56 @@ export function getConfigurationStatus(value: string | null): ConfigurationStatu
   return value === null || value.trim().length === 0 ? 'missing' : 'configured';
 }
 
-function mapHealth(ok: boolean): DependencyHealth {
-  return ok ? 'ok' : 'down';
+export async function withDeadline<T>(
+  operation: Promise<T>,
+  timeoutMs = HEALTH_TIMEOUT_MS,
+): Promise<T | 'timeout'> {
+  let timeout: NodeJS.Timeout | null = null;
+
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<'timeout'>((resolve) => {
+        timeout = setTimeout(() => resolve('timeout'), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout !== null) {
+      clearTimeout(timeout);
+    }
+  }
 }
 
 async function checkPostgresStatus(): Promise<DependencyHealth> {
   try {
-    await db.execute(sql`select 1`);
+    const result = await withDeadline(db.execute(sql`select 1`));
 
-    return 'ok';
+    return result === 'timeout' ? 'degraded' : 'ok';
   } catch {
     return 'down';
   }
 }
 
 async function checkRedisStatus(): Promise<DependencyHealth> {
-  const health = await checkRedisHealth();
+  try {
+    const result = await withDeadline(checkRedisHealth());
 
-  return mapHealth(health.ok);
+    if (result === 'timeout') {
+      return 'degraded';
+    }
+
+    return result.ok ? 'ok' : 'down';
+  } catch {
+    return 'down';
+  }
 }
 
 async function getLatestWorkflowRun(actor: DbActor) {
-  const runs = (
-    await Promise.all(
-      PHASE_1_WORKFLOW_TYPES.map((jobType) =>
-        jobsRepository.listByType(actor, {
-          jobType,
-          limit: 1,
-        }),
-      ),
-    )
-  )
-    .flat()
-    .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
-  const latest = runs[0];
+  const latest = await jobsRepository.getLatestByTypes(actor, {
+    jobTypes: [...PHASE_1_WORKFLOW_TYPES],
+  });
 
-  if (latest === undefined) {
+  if (latest === null) {
     return null;
   }
 

@@ -51,6 +51,9 @@ const listByTypeInputSchema = z.object({
   statuses: z.array(jobStatusSchema).min(1).optional(),
   limit: z.number().int().positive().max(20).default(10),
 });
+const latestByTypesInputSchema = z.object({
+  jobTypes: z.array(z.string().trim().min(1).max(255)).min(1).max(20),
+});
 
 export type JobRunRecord = z.infer<typeof jobRunRecordSchema>;
 
@@ -163,6 +166,27 @@ export function createJobsRepository(database: DbClient = db) {
       return row === null ? null : parseJobRunRow(row);
     },
 
+    async getLatestByTypes(
+      actor: DbActor,
+      input: z.infer<typeof latestByTypesInputSchema>,
+    ): Promise<JobRunRecord | null> {
+      const validatedActor = assertDbActor(actor);
+      const validatedInput = latestByTypesInputSchema.parse(input);
+      const rows = await database
+        .select()
+        .from(jobRuns)
+        .where(
+          and(
+            eq(jobRuns.userId, validatedActor.userId),
+            inArray(jobRuns.jobType, validatedInput.jobTypes),
+          ),
+        )
+        .orderBy(desc(jobRuns.createdAt), desc(jobRuns.id))
+        .limit(1);
+      const row = getOneOrNull(rows);
+
+      return row === null ? null : parseJobRunRow(row);
+    },
     async listByType(
       actor: DbActor,
       input: z.infer<typeof listByTypeInputSchema>,

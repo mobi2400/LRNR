@@ -97,40 +97,43 @@ export function createOutboxRepository(database: DbClient = db) {
       now = new Date(),
     ): Promise<DeliveryOutboxRecord | null> {
       const validatedActor = assertDbActor(actor);
-      const rows = await database
-        .select()
-        .from(deliveryOutbox)
-        .where(
-          and(
-            eq(deliveryOutbox.userId, validatedActor.userId),
-            eq(deliveryOutbox.status, 'pending'),
-            lte(deliveryOutbox.nextAttemptAt, now),
-          ),
-        )
-        .orderBy(asc(deliveryOutbox.nextAttemptAt), asc(deliveryOutbox.createdAt))
-        .limit(1);
-      const pendingRow = getOneOrNull(rows);
+      return database.transaction(async (transaction) => {
+        const rows = await transaction
+          .select()
+          .from(deliveryOutbox)
+          .where(
+            and(
+              eq(deliveryOutbox.userId, validatedActor.userId),
+              eq(deliveryOutbox.status, 'pending'),
+              lte(deliveryOutbox.nextAttemptAt, now),
+            ),
+          )
+          .orderBy(asc(deliveryOutbox.nextAttemptAt), asc(deliveryOutbox.createdAt))
+          .limit(1)
+          .for('update', { skipLocked: true });
+        const pendingRow = getOneOrNull(rows);
 
-      if (pendingRow === null) {
-        return null;
-      }
+        if (pendingRow === null) {
+          return null;
+        }
 
-      const [claimedRow] = await database
-        .update(deliveryOutbox)
-        .set({
-          status: 'sending',
-          attemptCount: pendingRow.attemptCount + 1,
-          ...buildUpdatedAtPatch(),
-        })
-        .where(
-          and(
-            eq(deliveryOutbox.id, pendingRow.id),
-            eq(deliveryOutbox.status, 'pending'),
-          ),
-        )
-        .returning();
+        const [claimedRow] = await transaction
+          .update(deliveryOutbox)
+          .set({
+            status: 'sending',
+            attemptCount: pendingRow.attemptCount + 1,
+            ...buildUpdatedAtPatch(),
+          })
+          .where(
+            and(
+              eq(deliveryOutbox.id, pendingRow.id),
+              eq(deliveryOutbox.status, 'pending'),
+            ),
+          )
+          .returning();
 
-      return claimedRow === undefined ? null : parseOutboxRow(claimedRow);
+        return claimedRow === undefined ? null : parseOutboxRow(claimedRow);
+      });
     },
 
     async markSent(
@@ -176,7 +179,7 @@ export function createOutboxRepository(database: DbClient = db) {
       const [row] = await database
         .update(deliveryOutbox)
         .set({
-          status: 'failed',
+          status: 'pending',
           lastError: validatedInput.lastError,
           nextAttemptAt: validatedInput.nextAttemptAt,
           ...buildUpdatedAtPatch(),

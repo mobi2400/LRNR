@@ -21,7 +21,9 @@ import { assertServerOnly } from '@/utils/server-only';
 
 assertServerOnly('src/services/delivery.service.ts');
 
-const TELEGRAM_RETRY_DELAY_MS = 5 * 60 * 1000;
+const TELEGRAM_MAX_PHASE1_MESSAGE_LENGTH = 3800;
+const TELEGRAM_RETRY_BASE_DELAY_MS = 60 * 1000;
+const TELEGRAM_RETRY_MAX_DELAY_MS = 60 * 60 * 1000;
 const IDEMPOTENCY_TTL_MS = 1000 * 60 * 60 * 24;
 
 export interface LessonReadyAlertInput {
@@ -29,6 +31,24 @@ export interface LessonReadyAlertInput {
   title: string;
 }
 
+
+export function getTelegramRetryDelayMs(attemptCount: number): number {
+  const exponent = Math.max(attemptCount - 1, 0);
+  const delay = TELEGRAM_RETRY_BASE_DELAY_MS * 2 ** exponent;
+
+  return Math.min(delay, TELEGRAM_RETRY_MAX_DELAY_MS);
+}
+
+export function assertPhase1TelegramMessageFitsSingleSend(text: string): void {
+  if (splitTelegramMessage(text, TELEGRAM_MAX_PHASE1_MESSAGE_LENGTH).length > 1) {
+    throw new AppError({
+      code: 'VALIDATION_ERROR',
+      message:
+        'Phase 1 Telegram alerts must fit in one message to avoid partial-send duplication.',
+      status: 400,
+    });
+  }
+}
 function buildDeepLink(path: string): string {
   return new URL(path, serverConfig.appUrl).toString();
 }
@@ -175,12 +195,11 @@ export const deliveryService = {
       const payload = telegramDeliveryPayloadSchema.parse(claimed.payload);
       const chatId = await getTelegramChatId(actor);
 
-      for (const chunk of splitTelegramMessage(payload.text)) {
-        await sendTelegramMessage({
-          chatId,
-          text: chunk,
-        });
-      }
+      assertPhase1TelegramMessageFitsSingleSend(payload.text);
+      await sendTelegramMessage({
+        chatId,
+        text: payload.text,
+      });
 
       const sent = await outboxRepository.markSent(actor, claimed.id);
 
@@ -193,7 +212,7 @@ export const deliveryService = {
       await outboxRepository.markFailed(actor, claimed.id, {
         lastError:
           error instanceof Error ? error.message : 'Telegram delivery failed.',
-        nextAttemptAt: new Date(Date.now() + TELEGRAM_RETRY_DELAY_MS),
+        nextAttemptAt: new Date(Date.now() + getTelegramRetryDelayMs(claimed.attemptCount)),
       });
 
       return telegramProcessResultSchema.parse({

@@ -3,8 +3,10 @@ import '../setup-env';
 import { describe, expect, it } from 'vitest';
 
 import {
+  assertPhase1TelegramMessageFitsSingleSend,
   buildTelegramTestAlertPayload,
   buildTelegramTestDeliveryKey,
+  getTelegramRetryDelayMs,
 } from '../../src/services/delivery.service';
 import { splitTelegramMessage } from '../../src/lib/telegram';
 
@@ -39,5 +41,21 @@ describe('telegram delivery helpers', () => {
 
     expect(chunks.length).toBeGreaterThan(1);
     expect(chunks.every((chunk) => chunk.length <= 1000)).toBe(true);
+  });
+
+  it('uses bounded exponential retry delays for failed Telegram sends', () => {
+    expect(getTelegramRetryDelayMs(1)).toBe(60_000);
+    expect(getTelegramRetryDelayMs(2)).toBe(120_000);
+    expect(getTelegramRetryDelayMs(99)).toBe(3_600_000);
+  });
+
+  it('requires Phase 1 alerts to fit a single Telegram send', () => {
+    expect(() =>
+      assertPhase1TelegramMessageFitsSingleSend('short learning cockpit alert'),
+    ).not.toThrow();
+
+    expect(() =>
+      assertPhase1TelegramMessageFitsSingleSend(`start\n${'a'.repeat(4100)}`),
+    ).toThrow('Phase 1 Telegram alerts must fit in one message');
   });
 });

@@ -194,6 +194,12 @@ What should I do now?
 Where do I click?
 ```
 
+### Phase 1 duplicate-safety rule
+
+Phase 1 worker-delivered Telegram alerts must fit in one Telegram send. The worker rejects oversized alert text instead of partially sending chunks, because chunk progress is not persisted yet and retrying a partially sent multi-chunk alert could duplicate user-visible messages.
+
+The `splitTelegramMessage` helper remains available for future delivery modes, but Phase 1 lesson-ready and test alerts are concise frontend deep links rather than lesson content.
+
 ---
 
 ## Deep Link Rules

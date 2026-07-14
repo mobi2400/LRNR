@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 
 import { AppShell } from '@/components/app-shell/AppShell';
+import { OnboardingPanel } from '@/components/onboarding/OnboardingPanel';
 import {
   assertUnlockedOwnerSession,
   clearSessionCookies,
@@ -30,10 +31,10 @@ export default async function DashboardPage(): Promise<JSX.Element> {
         <header className="cockpit-hero">
           <div>
             <p className="cockpit-kicker">Learning Dashboard</p>
-            <h2>Continue the private Phase 1 study loop from one calm command center.</h2>
+            <h2>Start the Architect flow, then let the rest of Phase 1 build on grounded learner context.</h2>
             <p>
-              The dashboard is frontend-first now: current lesson, curriculum,
-              review, and settings are all available as protected study surfaces.
+              Frontend stays the cockpit. This onboarding loop now goes through protected
+              LRNR APIs and writes profile, topic brief, and compact learner-memory seed data.
             </p>
           </div>
           <form action={logoutAction}>
@@ -43,18 +44,7 @@ export default async function DashboardPage(): Promise<JSX.Element> {
           </form>
         </header>
         <div className="cockpit-grid cockpit-grid--dashboard">
-          <article className="cockpit-panel cockpit-panel--primary">
-            <p className="cockpit-panel__label">Today</p>
-            <h3>Current lesson surface is ready</h3>
-            <p>
-              Start with the lesson page, then move into guided review once the
-              explanation and mental model feel clear.
-            </p>
-            <div className="cockpit-chip-row">
-              <a className="workspace-button" href="/lesson/current">Continue learning</a>
-              <a className="workspace-button workspace-button--secondary" href="/lesson/review">Open review</a>
-            </div>
-          </article>
+          <OnboardingPanel />
           <article className="cockpit-panel">
             <p className="cockpit-panel__label">Protection</p>
             <dl className="cockpit-definition-list">
@@ -64,19 +54,23 @@ export default async function DashboardPage(): Promise<JSX.Element> {
             </dl>
           </article>
           <article className="cockpit-panel">
-            <p className="cockpit-panel__label">Curriculum</p>
-            <h3>Roadmap shell is in place</h3>
+            <p className="cockpit-panel__label">Lesson Surfaces</p>
+            <h3>Protected pages are still ready while onboarding stays interactive</h3>
             <p>
-              The curriculum page now acts as the study map where Layer 1, Layer 2,
-              and upcoming live updates will converge.
+              The workflow will hold off on curriculum and lesson generation until the
+              Architect has enough signal to hand off a real topic brief.
             </p>
+            <div className="cockpit-chip-row">
+              <a className="workspace-button" href="/lesson/current">Current lesson</a>
+              <a className="workspace-button workspace-button--secondary" href="/lesson/review">Lesson review</a>
+            </div>
           </article>
           <article className="cockpit-panel">
-            <p className="cockpit-panel__label">Settings</p>
-            <h3>Notification and voice controls are staged</h3>
+            <p className="cockpit-panel__label">Curriculum</p>
+            <h3>Next phase handoff is staged, not rushed</h3>
             <p>
-              Settings already reserve space for Telegram, evaluation reminders,
-              and future voice UX preferences.
+              Part 8 stops after Architect completion so Cartographer and Curriculum Builder
+              can start later from a typed topic brief instead of a vague goal.
             </p>
           </article>
         </div>

@@ -46,6 +46,12 @@ const updateJobStatusInputSchema = z.object({
   finishedAt: z.date().nullable().optional(),
 });
 
+const listByTypeInputSchema = z.object({
+  jobType: z.string().trim().min(1).max(255),
+  statuses: z.array(jobStatusSchema).min(1).optional(),
+  limit: z.number().int().positive().max(20).default(10),
+});
+
 export type JobRunRecord = z.infer<typeof jobRunRecordSchema>;
 
 function parseJobRunRow(row: JobRunRow): JobRunRecord {
@@ -133,6 +139,51 @@ export function createJobsRepository(database: DbClient = db) {
         error,
         finishedAt: new Date(),
       });
+    },
+
+    async getById(
+      actor: DbActor,
+      jobRunId: string,
+    ): Promise<JobRunRecord | null> {
+      const validatedActor = assertDbActor(actor);
+      const validatedJobRunId = z.string().uuid().parse(jobRunId);
+      const rows = await database
+        .select()
+        .from(jobRuns)
+        .where(
+          and(
+            eq(jobRuns.id, validatedJobRunId),
+            eq(jobRuns.userId, validatedActor.userId),
+          ),
+        )
+        .limit(1);
+
+      const row = getOneOrNull(rows);
+
+      return row === null ? null : parseJobRunRow(row);
+    },
+
+    async listByType(
+      actor: DbActor,
+      input: z.infer<typeof listByTypeInputSchema>,
+    ): Promise<JobRunRecord[]> {
+      const validatedActor = assertDbActor(actor);
+      const validatedInput = listByTypeInputSchema.parse(input);
+      const rows = await database
+        .select()
+        .from(jobRuns)
+        .where(eq(jobRuns.userId, validatedActor.userId));
+
+      return rows
+        .map(parseJobRunRow)
+        .filter((row) => row.jobType === validatedInput.jobType)
+        .filter((row) =>
+          validatedInput.statuses === undefined
+            ? true
+            : validatedInput.statuses.includes(row.status),
+        )
+        .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+        .slice(0, validatedInput.limit);
     },
   };
 }

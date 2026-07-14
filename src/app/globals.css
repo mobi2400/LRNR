@@ -370,3 +370,65 @@ a {
   }
 }
 
+.cockpit-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.cockpit-field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.cockpit-field span {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #5c4a35;
+}
+
+.cockpit-field textarea,
+.cockpit-field select {
+  width: 100%;
+  border: 1px solid rgba(92, 74, 53, 0.2);
+  border-radius: 16px;
+  background: rgba(255, 250, 244, 0.92);
+  color: #2f2418;
+  padding: 0.9rem 1rem;
+  font: inherit;
+}
+
+.cockpit-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.cockpit-status {
+  margin: 0;
+  color: #5c4a35;
+  font-size: 0.95rem;
+}
+
+.cockpit-question {
+  border: 1px solid rgba(92, 74, 53, 0.16);
+  border-radius: 16px;
+  background: rgba(255, 248, 238, 0.95);
+  padding: 1rem;
+  line-height: 1.55;
+}
+
+.cockpit-feedback {
+  margin: 0 0 1rem;
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  font-size: 0.92rem;
+}
+
+.cockpit-feedback--success {
+  background: rgba(32, 125, 78, 0.12);
+  color: #1d6b46;
+}
+
+.cockpit-feedback--error {
+  background: rgba(163, 45, 45, 0.12);
+  color: #8b2222;
+}

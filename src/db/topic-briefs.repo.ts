@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, lt, or } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db, type DbClient } from '@/db/client';
@@ -42,8 +42,14 @@ const upsertTopicBriefInputSchema = z.object({
   sourceAgent: z.string().trim().min(1).max(255).default('architect_node'),
 });
 
+const topicBriefCursorSchema = z.object({
+  createdAt: z.date(),
+  id: z.string().uuid(),
+});
+
 const listRecentBriefsInputSchema = z.object({
   limit: z.number().int().positive().max(50).default(10),
+  cursor: topicBriefCursorSchema.optional(),
 });
 
 export type TopicBriefRecord = z.infer<typeof topicBriefRecordSchema>;
@@ -112,13 +118,27 @@ export function createTopicBriefsRepository(database: DbClient = db) {
       input?: Partial<z.infer<typeof listRecentBriefsInputSchema>>,
     ): Promise<TopicBriefRecord[]> {
       const validatedActor = assertDbActor(actor);
-      const { limit } = listRecentBriefsInputSchema.parse(input ?? {});
+      const validatedInput = listRecentBriefsInputSchema.parse(input ?? {});
+      const conditions = [eq(topicBriefs.userId, validatedActor.userId)];
+
+      if (validatedInput.cursor !== undefined) {
+        conditions.push(
+          or(
+            lt(topicBriefs.createdAt, validatedInput.cursor.createdAt),
+            and(
+              eq(topicBriefs.createdAt, validatedInput.cursor.createdAt),
+              lt(topicBriefs.id, validatedInput.cursor.id),
+            ),
+          )!,
+        );
+      }
+
       const rows = await database
         .select()
         .from(topicBriefs)
-        .where(eq(topicBriefs.userId, validatedActor.userId))
-        .orderBy(desc(topicBriefs.createdAt))
-        .limit(limit);
+        .where(and(...conditions))
+        .orderBy(desc(topicBriefs.createdAt), desc(topicBriefs.id))
+        .limit(validatedInput.limit);
 
       return rows.map(parseTopicBriefRow);
     },

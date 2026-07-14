@@ -38,6 +38,8 @@ export const concepts = table(
     userTopicLookup: index('concepts_user_topic_idx').on(
       table.userId,
       table.topicSlug,
+      table.slug,
+      table.id,
     ),
   }),
 );

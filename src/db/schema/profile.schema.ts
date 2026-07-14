@@ -82,6 +82,7 @@ export const topicBriefs = table(
     recentBriefs: index('topic_briefs_user_created_idx').on(
       table.userId,
       table.createdAt,
+      table.id,
     ),
   }),
 );

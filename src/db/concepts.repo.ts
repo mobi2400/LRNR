@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq, gt, or } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db, type DbClient } from '@/db/client';
@@ -44,6 +44,16 @@ const upsertConceptInputSchema = z.object({
   summary: z.string().trim().min(1).max(4000).nullable().optional(),
   difficulty: z.number().int().min(0).max(10).nullable().optional(),
   metadata: jsonObjectSchema.default({}),
+});
+
+const conceptAlphaCursorSchema = z.object({
+  slug: z.string().trim().min(1).max(255),
+  id: z.string().uuid(),
+});
+
+const listConceptsInputSchema = z.object({
+  limit: z.number().int().positive().max(100).default(50),
+  cursor: conceptAlphaCursorSchema.optional(),
 });
 
 const replaceConceptPrerequisitesInputSchema = z.object({
@@ -111,18 +121,34 @@ export function createConceptsRepository(database: DbClient = db) {
     async listByTopicSlug(
       actor: DbActor,
       topicSlug: string,
+      input?: Partial<z.infer<typeof listConceptsInputSchema>>,
     ): Promise<ConceptRecord[]> {
       const validatedActor = assertDbActor(actor);
       const validatedTopicSlug = z.string().trim().min(1).parse(topicSlug);
+      const validatedInput = listConceptsInputSchema.parse(input ?? {});
+      const conditions = [
+        eq(concepts.userId, validatedActor.userId),
+        eq(concepts.topicSlug, validatedTopicSlug),
+      ];
+
+      if (validatedInput.cursor !== undefined) {
+        conditions.push(
+          or(
+            gt(concepts.slug, validatedInput.cursor.slug),
+            and(
+              eq(concepts.slug, validatedInput.cursor.slug),
+              gt(concepts.id, validatedInput.cursor.id),
+            ),
+          )!,
+        );
+      }
+
       const rows = await database
         .select()
         .from(concepts)
-        .where(
-          and(
-            eq(concepts.userId, validatedActor.userId),
-            eq(concepts.topicSlug, validatedTopicSlug),
-          ),
-        );
+        .where(and(...conditions))
+        .orderBy(asc(concepts.slug), asc(concepts.id))
+        .limit(validatedInput.limit);
 
       return rows.map(parseConceptRow);
     },

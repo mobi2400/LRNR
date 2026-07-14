@@ -1,4 +1,4 @@
-import { and, asc, eq, lte } from 'drizzle-orm';
+import { and, asc, desc, eq, lt, lte, or } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db, type DbClient } from '@/db/client';
@@ -37,15 +37,34 @@ const createOutboxItemInputSchema = z.object({
   nextAttemptAt: z.date().default(() => new Date()),
 });
 
+const outboxSummarySchema = outboxRecordSchema.omit({
+  payload: true,
+});
+
+const outboxCursorSchema = z.object({
+  createdAt: z.date(),
+  id: z.string().uuid(),
+});
+
+const listDeliverySummariesInputSchema = z.object({
+  status: outboxStatusSchema.optional(),
+  limit: z.number().int().positive().max(50).default(20),
+  cursor: outboxCursorSchema.optional(),
+});
 const markOutboxFailureInputSchema = z.object({
   lastError: z.string().trim().min(1).max(4000),
   nextAttemptAt: z.date(),
 });
 
 export type DeliveryOutboxRecord = z.infer<typeof outboxRecordSchema>;
+export type DeliveryOutboxSummary = z.infer<typeof outboxSummarySchema>;
 
 function parseOutboxRow(row: DeliveryOutboxRow): DeliveryOutboxRecord {
   return outboxRecordSchema.parse(row);
+}
+
+function parseOutboxSummary(row: unknown): DeliveryOutboxSummary {
+  return outboxSummarySchema.parse(row);
 }
 
 /**
@@ -136,6 +155,50 @@ export function createOutboxRepository(database: DbClient = db) {
       });
     },
 
+    async listDeliverySummaries(
+      actor: DbActor,
+      input?: Partial<z.infer<typeof listDeliverySummariesInputSchema>>,
+    ): Promise<DeliveryOutboxSummary[]> {
+      const validatedActor = assertDbActor(actor);
+      const validatedInput = listDeliverySummariesInputSchema.parse(input ?? {});
+      const conditions = [eq(deliveryOutbox.userId, validatedActor.userId)];
+
+      if (validatedInput.status !== undefined) {
+        conditions.push(eq(deliveryOutbox.status, validatedInput.status));
+      }
+
+      if (validatedInput.cursor !== undefined) {
+        conditions.push(
+          or(
+            lt(deliveryOutbox.createdAt, validatedInput.cursor.createdAt),
+            and(
+              eq(deliveryOutbox.createdAt, validatedInput.cursor.createdAt),
+              lt(deliveryOutbox.id, validatedInput.cursor.id),
+            ),
+          )!,
+        );
+      }
+
+      const rows = await database
+        .select({
+          id: deliveryOutbox.id,
+          userId: deliveryOutbox.userId,
+          channel: deliveryOutbox.channel,
+          deliveryKey: deliveryOutbox.deliveryKey,
+          status: deliveryOutbox.status,
+          attemptCount: deliveryOutbox.attemptCount,
+          nextAttemptAt: deliveryOutbox.nextAttemptAt,
+          lastError: deliveryOutbox.lastError,
+          createdAt: deliveryOutbox.createdAt,
+          updatedAt: deliveryOutbox.updatedAt,
+        })
+        .from(deliveryOutbox)
+        .where(and(...conditions))
+        .orderBy(desc(deliveryOutbox.createdAt), desc(deliveryOutbox.id))
+        .limit(validatedInput.limit);
+
+      return rows.map(parseOutboxSummary);
+    },
     async markSent(
       actor: DbActor,
       outboxId: string,

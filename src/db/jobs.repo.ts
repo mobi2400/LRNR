@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt, or } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db, type DbClient } from '@/db/client';
@@ -46,10 +46,16 @@ const updateJobStatusInputSchema = z.object({
   finishedAt: z.date().nullable().optional(),
 });
 
+const createdAtIdCursorSchema = z.object({
+  createdAt: z.date(),
+  id: z.string().uuid(),
+});
+
 const listByTypeInputSchema = z.object({
   jobType: z.string().trim().min(1).max(255),
   statuses: z.array(jobStatusSchema).min(1).optional(),
   limit: z.number().int().positive().max(20).default(10),
+  cursor: createdAtIdCursorSchema.optional(),
 });
 const latestByTypesInputSchema = z.object({
   jobTypes: z.array(z.string().trim().min(1).max(255)).min(1).max(20),
@@ -202,11 +208,23 @@ export function createJobsRepository(database: DbClient = db) {
         conditions.push(inArray(jobRuns.status, validatedInput.statuses));
       }
 
+      if (validatedInput.cursor !== undefined) {
+        conditions.push(
+          or(
+            lt(jobRuns.createdAt, validatedInput.cursor.createdAt),
+            and(
+              eq(jobRuns.createdAt, validatedInput.cursor.createdAt),
+              lt(jobRuns.id, validatedInput.cursor.id),
+            ),
+          )!,
+        );
+      }
+
       const rows = await database
         .select()
         .from(jobRuns)
         .where(and(...conditions))
-        .orderBy(desc(jobRuns.createdAt))
+        .orderBy(desc(jobRuns.createdAt), desc(jobRuns.id))
         .limit(validatedInput.limit);
 
       return rows.map(parseJobRunRow);

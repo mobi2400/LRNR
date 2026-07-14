@@ -41,8 +41,14 @@ export const deliveryOutbox = table(
       table.deliveryKey,
     ),
     pendingDeliveryLookup: index('delivery_outbox_ready_idx').on(
+      table.userId,
       table.status,
       table.nextAttemptAt,
+    ),
+    userCreatedLookup: index('delivery_outbox_user_created_idx').on(
+      table.userId,
+      table.createdAt,
+      table.id,
     ),
   }),
 );

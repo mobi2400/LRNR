@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull, lt, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db, type DbClient } from '@/db/client';
@@ -11,6 +11,23 @@ import {
   ragEventTypeSchema,
 } from '@/db/repository-helpers';
 import type { RagMemoryRow } from '@/db/types';
+
+const ragMemorySummarySchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  topicSlug: z.string().nullable(),
+  conceptSlug: z.string().nullable(),
+  eventType: ragEventTypeSchema,
+  sourceAgent: z.string(),
+  sourceId: z.string().uuid().nullable(),
+  sourceUri: z.string().nullable(),
+  confidence: z.string(),
+  qualityScore: z.string().nullable(),
+  isResolved: z.boolean(),
+  tokenCount: z.number().int().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 
 const ragMemoryRecordSchema = z.object({
   id: z.string().uuid(),
@@ -43,6 +60,11 @@ const ragMemoryRecordSchema = z.object({
   idempotencyKey: z.string().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
+});
+
+const createdAtIdCursorSchema = z.object({
+  createdAt: z.date(),
+  id: z.string().uuid(),
 });
 
 const ragMemoryWriteSchema = z.object({
@@ -78,14 +100,20 @@ const ragQueryInputSchema = z.object({
   metadataFilters: jsonObjectSchema.optional(),
   unresolvedOnly: z.boolean().default(false),
   limit: z.number().int().positive().max(100).default(20),
+  cursor: createdAtIdCursorSchema.optional(),
 });
 
+export type RagMemorySummary = z.infer<typeof ragMemorySummarySchema>;
 export type RagMemoryRecord = z.infer<typeof ragMemoryRecordSchema>;
 export type RagMemoryWriteInput = z.infer<typeof ragMemoryWriteSchema>;
 export type RagMemoryQueryInput = z.infer<typeof ragQueryInputSchema>;
 
 function parseRagMemoryRow(row: RagMemoryRow): RagMemoryRecord {
   return ragMemoryRecordSchema.parse(row);
+}
+
+function parseRagMemorySummary(row: unknown): RagMemorySummary {
+  return ragMemorySummarySchema.parse(row);
 }
 
 /**
@@ -280,6 +308,18 @@ export function createRagRepository(database: DbClient = db) {
         baseConditions.push(eq(ragMemory.isResolved, false));
       }
 
+      if (validatedInput.cursor !== undefined) {
+        baseConditions.push(
+          or(
+            lt(ragMemory.createdAt, validatedInput.cursor.createdAt),
+            and(
+              eq(ragMemory.createdAt, validatedInput.cursor.createdAt),
+              lt(ragMemory.id, validatedInput.cursor.id),
+            ),
+          )!,
+        );
+      }
+
       if (validatedInput.metadataFilters !== undefined) {
         baseConditions.push(
           sql`${ragMemory.metadata} @> ${JSON.stringify(
@@ -292,12 +332,85 @@ export function createRagRepository(database: DbClient = db) {
         .select()
         .from(ragMemory)
         .where(and(...baseConditions))
-        .orderBy(desc(ragMemory.createdAt), asc(ragMemory.chunkOrdinal))
+        .orderBy(desc(ragMemory.createdAt), desc(ragMemory.id))
         .limit(validatedInput.limit);
 
       return rows.map(parseRagMemoryRow);
     },
 
+    async listMemorySummaries(
+      actor: DbActor,
+      input?: Partial<RagMemoryQueryInput>,
+    ): Promise<RagMemorySummary[]> {
+      const validatedActor = assertDbActor(actor);
+      const validatedInput = ragQueryInputSchema.parse(input ?? {});
+      const conditions = [
+        eq(ragMemory.userId, validatedActor.userId),
+        isNull(ragMemory.supersededById),
+        isNull(ragMemory.stalenessReason),
+        or(isNull(ragMemory.expiresAt), gt(ragMemory.expiresAt, new Date()))!,
+      ];
+
+      if (validatedInput.topicSlug !== undefined) {
+        conditions.push(eq(ragMemory.topicSlug, validatedInput.topicSlug));
+      }
+
+      if (validatedInput.conceptSlug !== undefined) {
+        conditions.push(eq(ragMemory.conceptSlug, validatedInput.conceptSlug));
+      }
+
+      if (validatedInput.eventType !== undefined) {
+        conditions.push(eq(ragMemory.eventType, validatedInput.eventType));
+      }
+
+      if (validatedInput.unresolvedOnly) {
+        conditions.push(eq(ragMemory.isResolved, false));
+      }
+
+      if (validatedInput.cursor !== undefined) {
+        conditions.push(
+          or(
+            lt(ragMemory.createdAt, validatedInput.cursor.createdAt),
+            and(
+              eq(ragMemory.createdAt, validatedInput.cursor.createdAt),
+              lt(ragMemory.id, validatedInput.cursor.id),
+            ),
+          )!,
+        );
+      }
+
+      if (validatedInput.metadataFilters !== undefined) {
+        conditions.push(
+          sql`${ragMemory.metadata} @> ${JSON.stringify(
+            validatedInput.metadataFilters,
+          )}::jsonb`,
+        );
+      }
+
+      const rows = await database
+        .select({
+          id: ragMemory.id,
+          userId: ragMemory.userId,
+          topicSlug: ragMemory.topicSlug,
+          conceptSlug: ragMemory.conceptSlug,
+          eventType: ragMemory.eventType,
+          sourceAgent: ragMemory.sourceAgent,
+          sourceId: ragMemory.sourceId,
+          sourceUri: ragMemory.sourceUri,
+          confidence: ragMemory.confidence,
+          qualityScore: ragMemory.qualityScore,
+          isResolved: ragMemory.isResolved,
+          tokenCount: ragMemory.tokenCount,
+          createdAt: ragMemory.createdAt,
+          updatedAt: ragMemory.updatedAt,
+        })
+        .from(ragMemory)
+        .where(and(...conditions))
+        .orderBy(desc(ragMemory.createdAt), desc(ragMemory.id))
+        .limit(validatedInput.limit);
+
+      return rows.map(parseRagMemorySummary);
+    },
     async hasIdempotentWrite(
       actor: DbActor,
       idempotencyKey: string,

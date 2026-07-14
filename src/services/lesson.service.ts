@@ -10,6 +10,8 @@ import {
 import { knowledgeRepository } from '@/db/knowledge.repo';
 import { profileRepository } from '@/db/profile.repo';
 import { createRagRepository, ragRepository } from '@/db/rag.repo';
+import { RedisKeyValueStore } from '@/lib/redis';
+import { appLogger } from '@/lib/logger';
 import { type DbActor, requireRow } from '@/db/repository-helpers';
 import {
   createCompactSessionSummary,
@@ -27,9 +29,16 @@ import {
   type MarkLessonCompleteResponse,
 } from '@/schemas/lesson.schema';
 import { AppError } from '@/server/errors';
+import {
+  buildCurrentLessonCacheKey,
+  CACHE_TTL_MS,
+  getCachedJson,
+  setCachedJson,
+} from '@/server/cache';
 import { assertIdempotencyReplay, type AnyApiEnvelope } from '@/server/idempotency';
 
 const IDEMPOTENCY_TTL_MS = 1000 * 60 * 60 * 24;
+const lessonCacheStore = new RedisKeyValueStore();
 
 function getCurrentSession(
   sessions: unknown[],
@@ -133,46 +142,84 @@ export async function generateAndPersistCurrentLesson(
 export async function getCurrentLesson(
   actor: DbActor,
 ): Promise<CurrentLessonResponse> {
-  const { profile, curriculum } = await loadCurrentCurriculum(actor);
+  const readModel = await curriculumRepository.getCurrentLessonReadModel(actor);
 
-  if (profile === null || profile.currentTopicSlug === null) {
+  if (readModel.topicSlug === null) {
     return currentLessonResponseSchema.parse({
       lesson: null,
       reasonIfEmpty: 'no_active_topic',
     });
   }
 
-  if (curriculum === null) {
-    return currentLessonResponseSchema.parse({
-      lesson: null,
-      reasonIfEmpty: 'not_ready',
-    });
-  }
-
-  const currentSession = getCurrentSession(
-    curriculum.layer2Sessions,
-    curriculum.currentSessionId,
-  );
-
-  if (currentSession === null) {
+  if (
+    readModel.revision === null ||
+    readModel.currentSessionId === null ||
+    readModel.currentSession === null
+  ) {
     return currentLessonResponseSchema.parse({
       lesson: null,
       reasonIfEmpty: 'completed',
     });
   }
 
-  if (currentSession.lesson === undefined) {
+  const cacheKey = buildCurrentLessonCacheKey(
+    actor.userId,
+    readModel.currentSessionId,
+    readModel.revision,
+  );
+
+  try {
+    const cached = await getCachedJson(
+      lessonCacheStore,
+      cacheKey,
+      currentLessonResponseSchema,
+    );
+
+    if (cached !== null) {
+      return cached;
+    }
+  } catch (error) {
+    appLogger.warn('current_lesson.cache_read_failed', {
+      requestId: actor.requestId,
+      error: error instanceof Error ? error.message : 'unknown',
+    });
+  }
+
+  const currentSession = curriculumSessionSchema.parse(readModel.currentSession);
+
+  if (currentSession.id !== readModel.currentSessionId) {
     return currentLessonResponseSchema.parse({
       lesson: null,
       reasonIfEmpty: 'not_ready',
     });
   }
 
-  return currentLessonResponseSchema.parse({
-    lesson: lessonPayloadSchema.parse(currentSession.lesson),
-  });
-}
+  const response =
+    currentSession.lesson === undefined
+      ? currentLessonResponseSchema.parse({
+          lesson: null,
+          reasonIfEmpty: 'not_ready',
+        })
+      : currentLessonResponseSchema.parse({
+          lesson: lessonPayloadSchema.parse(currentSession.lesson),
+        });
 
+  try {
+    await setCachedJson(
+      lessonCacheStore,
+      cacheKey,
+      response,
+      CACHE_TTL_MS.currentLesson,
+    );
+  } catch (error) {
+    appLogger.warn('current_lesson.cache_write_failed', {
+      requestId: actor.requestId,
+      error: error instanceof Error ? error.message : 'unknown',
+    });
+  }
+
+  return response;
+}
 export async function markLessonComplete(
   actor: DbActor,
   input: {

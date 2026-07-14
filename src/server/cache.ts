@@ -16,11 +16,29 @@ const cacheEnvelopeSchema = z.object({
 
 export const CACHE_TTL_MS = {
   dashboard: 60000,
+  currentLesson: 120000,
+  curriculumMap: 600000,
   workflowStatus: 15000,
 } as const;
 
 export function buildDashboardCacheKey(userId: string): string {
   return `${CACHE_PREFIX}:dashboard:${userId}`;
+}
+
+export function buildCurrentLessonCacheKey(
+  userId: string,
+  sessionId: string,
+  revision: number,
+): string {
+  return `${CACHE_PREFIX}:current-lesson:${userId}:${sessionId}:r${revision}`;
+}
+
+export function buildCurriculumMapCacheKey(
+  userId: string,
+  topicSlug: string,
+  revision: number,
+): string {
+  return `${CACHE_PREFIX}:curriculum-map:${userId}:${topicSlug}:r${revision}`;
 }
 
 export function buildWorkflowStatusCacheKey(userId: string): string {

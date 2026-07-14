@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { MemoryKeyValueStore } from '../../src/lib/redis';
-import { getCachedJson, setCachedJson } from '../../src/server/cache';
+import {
+  buildCurrentLessonCacheKey,
+  buildCurriculumMapCacheKey,
+  getCachedJson,
+  setCachedJson,
+} from '../../src/server/cache';
 
 describe('cache helpers', () => {
   it('round-trips a versioned, validated cache value', async () => {
@@ -29,5 +34,26 @@ describe('cache helpers', () => {
       getCachedJson(store, key, z.object({ title: z.string() })),
     ).resolves.toBeNull();
     await expect(store.get(key)).resolves.toBeNull();
+  });
+
+  it('scopes lesson and curriculum cache keys by revision', () => {
+    expect(
+      buildCurrentLessonCacheKey(
+        '11111111-1111-1111-1111-111111111111',
+        'session-01',
+        7,
+      ),
+    ).toContain(
+      ':current-lesson:11111111-1111-1111-1111-111111111111:session-01:r7',
+    );
+    expect(
+      buildCurriculumMapCacheKey(
+        '11111111-1111-1111-1111-111111111111',
+        'typescript',
+        7,
+      ),
+    ).toContain(
+      ':curriculum-map:11111111-1111-1111-1111-111111111111:typescript:r7',
+    );
   });
 });

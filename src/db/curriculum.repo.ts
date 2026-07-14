@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db, type DbClient } from '@/db/client';
@@ -179,8 +179,102 @@ export function buildLessonCompletionPatch(
     currentSessionIndex: input.nextSessionIndex,
   };
 }
+
+const currentLessonReadRowSchema = z.object({
+  topicSlug: z.string().nullable(),
+  revision: z.number().int().nullable(),
+  currentSessionId: z.string().nullable(),
+  currentSessionIndex: z.number().int().nullable(),
+  currentSession: z.unknown().nullable(),
+});
+
+const curriculumMapReadRowSchema = z.object({
+  topicSlug: z.string().nullable(),
+  revision: z.number().int().nullable(),
+  currentSessionId: z.string().nullable(),
+  layer1Roadmap: z.unknown().nullable(),
+  sessions: z.array(z.unknown()),
+});
+
+export type CurrentLessonReadRow = z.infer<typeof currentLessonReadRowSchema>;
+export type CurriculumMapReadRow = z.infer<typeof curriculumMapReadRowSchema>;
 export function createCurriculumRepository(database: DbClient = db) {
   return {
+    async getCurrentLessonReadModel(
+      actor: DbActor,
+    ): Promise<CurrentLessonReadRow> {
+      const validatedActor = assertDbActor(actor);
+      const rows = await database.execute(sql`
+        select
+          p.current_topic_slug as "topicSlug",
+          c.revision as "revision",
+          c.current_session_id as "currentSessionId",
+          c.current_session_index as "currentSessionIndex",
+          case
+            when c.current_session_id is null then null
+            else c.layer_2_sessions -> c.current_session_index
+          end as "currentSession"
+        from user_profile p
+        left join curriculum_state c
+          on c.user_id = p.user_id
+          and c.topic_slug = p.current_topic_slug
+        where p.user_id = ${validatedActor.userId}
+        limit 1
+      `);
+      const row = getOneOrNull(rows as unknown as Record<string, unknown>[]);
+
+      return currentLessonReadRowSchema.parse(
+        row ?? {
+          topicSlug: null,
+          revision: null,
+          currentSessionId: null,
+          currentSessionIndex: null,
+          currentSession: null,
+        },
+      );
+    },
+
+    async getCurriculumMapReadModel(
+      actor: DbActor,
+    ): Promise<CurriculumMapReadRow> {
+      const validatedActor = assertDbActor(actor);
+      const rows = await database.execute(sql`
+        select
+          p.current_topic_slug as "topicSlug",
+          c.revision as "revision",
+          c.current_session_id as "currentSessionId",
+          c.layer_1_roadmap as "layer1Roadmap",
+          coalesce((
+            select jsonb_agg(
+              jsonb_build_object(
+                'id', session_item->>'id',
+                'title', session_item->>'title',
+                'status', session_item->>'status',
+                'conceptsToCover', coalesce(session_item->'conceptsToCover', '[]'::jsonb)
+              )
+              order by ordinal
+            )
+            from jsonb_array_elements(c.layer_2_sessions) with ordinality as items(session_item, ordinal)
+          ), '[]'::jsonb) as "sessions"
+        from user_profile p
+        left join curriculum_state c
+          on c.user_id = p.user_id
+          and c.topic_slug = p.current_topic_slug
+        where p.user_id = ${validatedActor.userId}
+        limit 1
+      `);
+      const row = getOneOrNull(rows as unknown as Record<string, unknown>[]);
+
+      return curriculumMapReadRowSchema.parse(
+        row ?? {
+          topicSlug: null,
+          revision: null,
+          currentSessionId: null,
+          layer1Roadmap: null,
+          sessions: [],
+        },
+      );
+    },
     async createCurriculum(
       actor: DbActor,
       input: UpsertCurriculumStateInput,

@@ -44,6 +44,7 @@ export const curriculumMapResponseSchema = z.object({
     }),
   ),
   currentSessionId: z.string().trim().min(1).nullable(),
+  revision: z.number().int().positive().nullable().optional(),
 });
 
 export type CurriculumSession = z.infer<typeof curriculumSessionSchema>;

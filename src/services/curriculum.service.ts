@@ -1,4 +1,6 @@
 import { curriculumRepository } from '@/db/curriculum.repo';
+import { RedisKeyValueStore } from '@/lib/redis';
+import { appLogger } from '@/lib/logger';
 import { knowledgeRepository } from '@/db/knowledge.repo';
 import { profileRepository } from '@/db/profile.repo';
 import { type DbActor, requireRow } from '@/db/repository-helpers';
@@ -11,6 +13,14 @@ import {
   type CurriculumMapResponse,
 } from '@/schemas/curriculum.schema';
 import type { CurriculumStateRecord } from '@/db/curriculum.repo';
+import {
+  buildCurriculumMapCacheKey,
+  CACHE_TTL_MS,
+  getCachedJson,
+  setCachedJson,
+} from '@/server/cache';
+
+const curriculumMapCacheStore = new RedisKeyValueStore();
 
 export async function runInitialCurriculumBuilder(
   actor: DbActor,
@@ -64,47 +74,86 @@ export async function runInitialCurriculumBuilder(
 export async function getCurriculumMap(
   actor: DbActor,
 ): Promise<CurriculumMapResponse> {
-  const profile = await profileRepository.getCurrentProfile(actor);
+  const readModel = await curriculumRepository.getCurriculumMapReadModel(actor);
 
-  if (profile?.currentTopicSlug === null || profile?.currentTopicSlug === undefined) {
+  if (readModel.topicSlug === null) {
     return curriculumMapResponseSchema.parse({
       topicSlug: null,
       roadmap: null,
       sessions: [],
       currentSessionId: null,
+      revision: null,
     });
   }
 
-  const curriculum = await curriculumRepository.getActiveCurriculum(
-    actor,
-    profile.currentTopicSlug,
-  );
+  if (readModel.revision !== null) {
+    const cacheKey = buildCurriculumMapCacheKey(
+      actor.userId,
+      readModel.topicSlug,
+      readModel.revision,
+    );
 
-  if (curriculum === null) {
-    return curriculumMapResponseSchema.parse({
-      topicSlug: profile.currentTopicSlug,
-      roadmap: null,
-      sessions: [],
-      currentSessionId: null,
+    try {
+      const cached = await getCachedJson(
+        curriculumMapCacheStore,
+        cacheKey,
+        curriculumMapResponseSchema,
+      );
+
+      if (cached !== null) {
+        return cached;
+      }
+    } catch (error) {
+      appLogger.warn('curriculum_map.cache_read_failed', {
+        requestId: actor.requestId,
+        error: error instanceof Error ? error.message : 'unknown',
+      });
+    }
+
+    const response = curriculumMapResponseSchema.parse({
+      topicSlug: readModel.topicSlug,
+      roadmap:
+        readModel.layer1Roadmap === null
+          ? null
+          : layer1RoadmapSchema.parse(readModel.layer1Roadmap),
+      sessions: readModel.sessions.map((session) => {
+        const parsed = curriculumSessionSchema
+          .omit({ lesson: true })
+          .parse(session);
+
+        return {
+          sessionId: parsed.id,
+          title: parsed.title,
+          status: parsed.status,
+          concepts: parsed.conceptsToCover,
+        };
+      }),
+      currentSessionId: readModel.currentSessionId,
+      revision: readModel.revision,
     });
+
+    try {
+      await setCachedJson(
+        curriculumMapCacheStore,
+        cacheKey,
+        response,
+        CACHE_TTL_MS.curriculumMap,
+      );
+    } catch (error) {
+      appLogger.warn('curriculum_map.cache_write_failed', {
+        requestId: actor.requestId,
+        error: error instanceof Error ? error.message : 'unknown',
+      });
+    }
+
+    return response;
   }
-
-  const roadmap = layer1RoadmapSchema.parse(curriculum.layer1Roadmap);
-  const sessions = curriculum.layer2Sessions.map((session) => {
-    const parsed = curriculumSessionSchema.parse(session);
-
-    return {
-      sessionId: parsed.id,
-      title: parsed.title,
-      status: parsed.status,
-      concepts: parsed.conceptsToCover,
-    };
-  });
 
   return curriculumMapResponseSchema.parse({
-    topicSlug: curriculum.topicSlug,
-    roadmap,
-    sessions,
-    currentSessionId: curriculum.currentSessionId,
+    topicSlug: readModel.topicSlug,
+    roadmap: null,
+    sessions: [],
+    currentSessionId: null,
+    revision: null,
   });
 }

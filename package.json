@@ -15,6 +15,9 @@
     "format": "prettier --check .",
     "format:write": "prettier --write .",
     "check:env": "tsx scripts/check-env.ts",
+    "eval:phase1": "vitest run tests/evals/phase1-eval.test.ts",
+    "smoke:phase1": "tsx scripts/smoke-test-phase-1.ts",
+    "deploy:check": "tsx scripts/deployment-readiness-check.ts",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:status": "tsx scripts/db-status.ts"

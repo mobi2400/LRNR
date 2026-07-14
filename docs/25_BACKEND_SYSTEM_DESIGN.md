@@ -211,7 +211,7 @@ Example route skeleton:
 export async function getCurrentLesson(req: Request): Promise<Response> {
   const ctx = await buildRequestContext(req);
   assertOwner(ctx.user);
-  await rateLimit(ctx, "lesson:read");
+  await rateLimit(ctx, 'lesson:read');
 
   const result = await lessonService.getCurrentLesson(ctx);
   return json(CurrentLessonResponseSchema.parse(result));
@@ -733,7 +733,7 @@ await curriculumRepo.updateLayer2({
   curriculumId,
   expectedRevision,
   nextLayer2,
-  source: "curriculum_builder_node",
+  source: 'curriculum_builder_node',
 });
 ```
 
@@ -793,6 +793,8 @@ This prevents losing external side effects.
 ## Caching Strategy
 
 Use Valkey/Redis for temporary acceleration.
+
+Use `docs/36_REDIS_DATABASE_PERFORMANCE_DESIGN.md` as the canonical implementation contract for key namespaces, value versioning, invalidation order, stampede control, L1 admission, and Redis failure behavior.
 
 Cache classes:
 
@@ -942,7 +944,7 @@ function assertOwner(user: AuthenticatedUser): void {
   const isOwnerEmail = user.email === process.env.OWNER_EMAIL;
 
   if (!isOwnerId && !isOwnerEmail) {
-    throw new UnauthorizedError("LRNR is private to the owner");
+    throw new UnauthorizedError('LRNR is private to the owner');
   }
 }
 ```
@@ -958,7 +960,7 @@ async function assertLrnrSecret(inputSecret: string): Promise<void> {
   });
 
   if (!ok) {
-    throw new UnauthorizedError("Invalid LRNR access secret");
+    throw new UnauthorizedError('Invalid LRNR access secret');
   }
 }
 ```

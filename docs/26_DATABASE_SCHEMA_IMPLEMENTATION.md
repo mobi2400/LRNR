@@ -945,6 +945,8 @@ Tables requiring RLS:
 
 Redis is not source of truth.
 
+The canonical namespace, TTL/invalidation matrix, atomic primitive rules, and L1/L2 decision gate are maintained in `docs/36_REDIS_DATABASE_PERFORMANCE_DESIGN.md`. The examples below are logical key families; implementations must add the canonical `lrnr:v1:{environment}` prefix.
+
 All keys must have TTL unless explicitly documented.
 
 ### Rate limits

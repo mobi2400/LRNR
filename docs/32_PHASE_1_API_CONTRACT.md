@@ -78,6 +78,7 @@ type ApiErrorCode =
   | 'CONFLICT'
   | 'RATE_LIMITED'
   | 'IDEMPOTENCY_CONFLICT'
+  | 'IDEMPOTENCY_IN_PROGRESS'
   | 'WORKFLOW_ALREADY_RUNNING'
   | 'PROVIDER_ERROR'
   | 'DATABASE_ERROR'
@@ -123,6 +124,15 @@ Required for:
 - audio generation if enabled
 
 If the same key and same request body are repeated, return the saved response.
+
+The backend must reserve the idempotency record atomically before executing side effects. A request that finds the same key and request hash in `processing` state must not execute again; return:
+
+```text
+409 IDEMPOTENCY_IN_PROGRESS
+Retry-After: <bounded retry delay>
+```
+
+Replay must preserve the original response body and status code. Expired `processing` records may be reclaimed only by an explicit timeout policy; normal upsert must never overwrite another request's route or request hash.
 
 If the same key is reused with a different body, return:
 
@@ -528,6 +538,8 @@ Rules:
 - updates session status
 - can write compact RAG summary if not already written
 - must not duplicate RAG summary on retry
+- reserves idempotency before mutation and replays the completed response
+- commits curriculum status/pointer, RAG summary, and idempotency completion transactionally or through a resumable step state machine
 
 ---
 

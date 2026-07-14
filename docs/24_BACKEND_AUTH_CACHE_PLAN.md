@@ -1,4 +1,5 @@
 # LRNR - Backend, Authentication, and Redis Plan
+
 > **Future implementation plan for the private LRNR backend.**
 > LRNR is personal-first: only the owner should have access.
 
@@ -106,7 +107,7 @@ Example owner check:
 ```ts
 function assertOwner(user: AuthenticatedUser): void {
   if (user.id !== process.env.OWNER_USER_ID) {
-    throw new UnauthorizedError("LRNR is private to the owner");
+    throw new UnauthorizedError('LRNR is private to the owner');
   }
 }
 ```
@@ -212,6 +213,8 @@ All routes must:
 ---
 
 ## Redis Role
+
+The detailed cache correctness, invalidation, atomic lock/rate-limit, and two-level cache contract is defined in `docs/36_REDIS_DATABASE_PERFORMANCE_DESIGN.md`.
 
 Redis is recommended, but it is not the source of truth.
 

@@ -185,13 +185,19 @@ Setup:
 
 - Redis URL
 - TLS if required by provider
-- maxmemory policy appropriate for cache use
+- one shared Phase 1 Redis instance may serve cache, locks, rate limits, and queues only when it is sized with headroom and uses `noeviction`; an evicted lock or queue key is a correctness risk
+- if cache memory pressure later requires eviction, use a separate cache instance with an eviction policy such as `allkeys-lfu`; keep coordination/queue Redis on `noeviction`
+- application keys use the environment-scoped `lrnr:v1:{environment}` namespace and explicit TTLs
+- memory usage and rejected writes are alerted before the shared instance reaches its limit
 
 Verify:
 
 - app can connect
 - rate limit key can be written
 - lock key can be acquired/released
+- lock release is token-owned and atomic
+- rate-limit increments are atomic under concurrency
+- malformed/version-mismatched cache values are evicted and rebuilt from PostgreSQL
 
 ### 4. Setup LLM and Embeddings
 

@@ -1,9 +1,18 @@
 import type { KeyValueStore } from '@/lib/redis';
+import { serverConfig } from '@/server/config';
 import { assertServerOnly } from '@/utils/server-only';
+import { z } from 'zod';
 
 assertServerOnly('src/server/cache.ts');
 
-const CACHE_PREFIX = 'lrnr:cache';
+const CACHE_SCHEMA_VERSION = 1;
+const CACHE_PREFIX = `lrnr:v1:${serverConfig.nodeEnv}:cache`;
+
+const cacheEnvelopeSchema = z.object({
+  schemaVersion: z.literal(CACHE_SCHEMA_VERSION),
+  cachedAt: z.string().datetime(),
+  value: z.unknown(),
+});
 
 export const CACHE_TTL_MS = {
   dashboard: 60000,
@@ -21,6 +30,7 @@ export function buildWorkflowStatusCacheKey(userId: string): string {
 export async function getCachedJson<T>(
   store: KeyValueStore,
   key: string,
+  valueSchema: z.ZodType<T>,
 ): Promise<T | null> {
   const rawValue = await store.get(key);
 
@@ -28,7 +38,17 @@ export async function getCachedJson<T>(
     return null;
   }
 
-  return JSON.parse(rawValue) as T;
+  try {
+    const envelope = cacheEnvelopeSchema.parse(JSON.parse(rawValue));
+
+    return valueSchema.parse(envelope.value);
+  } catch {
+    // Cache corruption or a stale schema must not break an authoritative DB
+    // read. Delete the unusable entry and let the caller rebuild it.
+    await store.delete(key);
+
+    return null;
+  }
 }
 
 export async function setCachedJson(
@@ -37,9 +57,17 @@ export async function setCachedJson(
   value: unknown,
   ttlMs: number,
 ): Promise<void> {
-  await store.set(key, JSON.stringify(value), {
-    ttlMs,
-  });
+  await store.set(
+    key,
+    JSON.stringify({
+      schemaVersion: CACHE_SCHEMA_VERSION,
+      cachedAt: new Date().toISOString(),
+      value,
+    }),
+    {
+      ttlMs,
+    },
+  );
 }
 
 export async function clearCachedValue(

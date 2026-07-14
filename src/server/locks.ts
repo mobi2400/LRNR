@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
 import type { KeyValueStore } from '@/lib/redis';
+import { serverConfig } from '@/server/config';
 import { assertServerOnly } from '@/utils/server-only';
 
 assertServerOnly('src/server/locks.ts');
 
-const LOCK_PREFIX = 'lrnr:lock';
+const LOCK_PREFIX = `lrnr:v1:${serverConfig.nodeEnv}:lock`;
 
 export interface LockHandle {
   key: string;
@@ -43,13 +44,8 @@ export async function releaseLock(
   store: KeyValueStore,
   lock: LockHandle,
 ): Promise<boolean> {
-  const currentToken = await store.get(lock.key);
-
-  if (currentToken !== lock.token) {
-    return false;
-  }
-
-  await store.delete(lock.key);
-
-  return true;
+  // Ownership check and deletion must be one Redis operation. A GET followed by
+  // DEL can delete a new owner's lock when the original lease expires between
+  // those commands.
+  return store.deleteIfValue(lock.key, lock.token);
 }

@@ -93,16 +93,19 @@ export const ragMemory = table(
   (table) => ({
     userTopicEventLookup: index('rag_memory_user_topic_event_idx').on(
       table.userId,
-      table.topicId,
+      table.topicSlug,
       table.eventType,
       table.createdAt,
     ),
-    unresolvedLookup: index('rag_memory_unresolved_idx').on(
+    userConceptEventLookup: index('rag_memory_user_concept_event_idx').on(
       table.userId,
-      table.topicId,
+      table.conceptSlug,
       table.eventType,
       table.createdAt,
     ),
+    unresolvedLookup: index('rag_memory_unresolved_idx')
+      .on(table.userId, table.topicSlug, table.eventType, table.createdAt)
+      .where(sql`${table.isResolved} = false`),
     idempotencyUnique: uniqueIndex('rag_memory_idempotency_idx')
       .on(table.userId, table.idempotencyKey)
       .where(sql`${table.idempotencyKey} is not null`),

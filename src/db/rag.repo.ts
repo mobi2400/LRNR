@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNotNull } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNull, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db, type DbClient } from '@/db/client';
@@ -8,7 +8,6 @@ import {
   type DbActor,
   getOneOrNull,
   jsonObjectSchema,
-  matchesMetadataFilters,
   ragEventTypeSchema,
 } from '@/db/repository-helpers';
 import type { RagMemoryRow } from '@/db/types';
@@ -120,8 +119,13 @@ export function createRagRepository(database: DbClient = db) {
         return parseRagMemoryRow(insertedRow);
       }
 
-      if (validatedInput.idempotencyKey === undefined || validatedInput.idempotencyKey === null) {
-        throw new Error('RAG write unexpectedly failed without an idempotency key.');
+      if (
+        validatedInput.idempotencyKey === undefined ||
+        validatedInput.idempotencyKey === null
+      ) {
+        throw new Error(
+          'RAG write unexpectedly failed without an idempotency key.',
+        );
       }
 
       const existing = await this.getByIdempotencyKey(
@@ -130,7 +134,9 @@ export function createRagRepository(database: DbClient = db) {
       );
 
       if (existing === null) {
-        throw new Error('RAG write conflict occurred but no existing row could be loaded.');
+        throw new Error(
+          'RAG write conflict occurred but no existing row could be loaded.',
+        );
       }
 
       return existing;
@@ -184,14 +190,21 @@ export function createRagRepository(database: DbClient = db) {
     ): Promise<RagMemoryRecord[]> {
       const validatedActor = assertDbActor(actor);
       const validatedInput = ragQueryInputSchema.parse(input ?? {});
-      const baseConditions = [eq(ragMemory.userId, validatedActor.userId)];
+      const baseConditions = [
+        eq(ragMemory.userId, validatedActor.userId),
+        isNull(ragMemory.supersededById),
+        isNull(ragMemory.stalenessReason),
+        or(isNull(ragMemory.expiresAt), gt(ragMemory.expiresAt, new Date()))!,
+      ];
 
       if (validatedInput.topicSlug !== undefined) {
         baseConditions.push(eq(ragMemory.topicSlug, validatedInput.topicSlug));
       }
 
       if (validatedInput.conceptSlug !== undefined) {
-        baseConditions.push(eq(ragMemory.conceptSlug, validatedInput.conceptSlug));
+        baseConditions.push(
+          eq(ragMemory.conceptSlug, validatedInput.conceptSlug),
+        );
       }
 
       if (validatedInput.eventType !== undefined) {
@@ -202,6 +215,14 @@ export function createRagRepository(database: DbClient = db) {
         baseConditions.push(eq(ragMemory.isResolved, false));
       }
 
+      if (validatedInput.metadataFilters !== undefined) {
+        baseConditions.push(
+          sql`${ragMemory.metadata} @> ${JSON.stringify(
+            validatedInput.metadataFilters,
+          )}::jsonb`,
+        );
+      }
+
       const rows = await database
         .select()
         .from(ragMemory)
@@ -209,15 +230,7 @@ export function createRagRepository(database: DbClient = db) {
         .orderBy(desc(ragMemory.createdAt), asc(ragMemory.chunkOrdinal))
         .limit(validatedInput.limit);
 
-      const parsedRows = rows.map(parseRagMemoryRow);
-
-      if (validatedInput.metadataFilters === undefined) {
-        return parsedRows;
-      }
-
-      return parsedRows.filter((row) =>
-        matchesMetadataFilters(row.metadata, validatedInput.metadataFilters ?? {}),
-      );
+      return rows.map(parseRagMemoryRow);
     },
 
     async hasIdempotentWrite(

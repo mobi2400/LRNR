@@ -18,6 +18,11 @@ export interface KeyValueStore {
     options?: KeyValueStoreSetOptions,
   ): Promise<boolean>;
   delete(key: string): Promise<number>;
+  deleteIfValue(key: string, expectedValue: string): Promise<boolean>;
+  incrementWithTtl(
+    key: string,
+    ttlMs: number,
+  ): Promise<{ count: number; ttlMs: number }>;
 }
 
 export interface RedisHealthStatus {
@@ -109,6 +114,48 @@ export class RedisKeyValueStore implements KeyValueStore {
 
     return client.del(key);
   }
+
+  async deleteIfValue(key: string, expectedValue: string): Promise<boolean> {
+    const client = await ensureRedisConnection();
+    const result = await client.eval(
+      `
+        if redis.call('GET', KEYS[1]) == ARGV[1] then
+          return redis.call('DEL', KEYS[1])
+        end
+        return 0
+      `,
+      1,
+      key,
+      expectedValue,
+    );
+
+    return result === 1;
+  }
+
+  async incrementWithTtl(
+    key: string,
+    ttlMs: number,
+  ): Promise<{ count: number; ttlMs: number }> {
+    const client = await ensureRedisConnection();
+    const result = (await client.eval(
+      `
+        local count = redis.call('INCR', KEYS[1])
+        if count == 1 then
+          redis.call('PEXPIRE', KEYS[1], ARGV[1])
+        end
+        local remainingTtl = redis.call('PTTL', KEYS[1])
+        return { count, remainingTtl }
+      `,
+      1,
+      key,
+      ttlMs,
+    )) as [number, number];
+
+    return {
+      count: Number(result[0]),
+      ttlMs: Math.max(Number(result[1]), 1),
+    };
+  }
 }
 
 export class MemoryKeyValueStore implements KeyValueStore {
@@ -162,5 +209,38 @@ export class MemoryKeyValueStore implements KeyValueStore {
     const didDelete = this.entries.delete(key);
 
     return didDelete ? 1 : 0;
+  }
+
+  async deleteIfValue(key: string, expectedValue: string): Promise<boolean> {
+    this.evictExpired(key);
+
+    if (this.entries.get(key)?.value !== expectedValue) {
+      return false;
+    }
+
+    this.entries.delete(key);
+
+    return true;
+  }
+
+  async incrementWithTtl(
+    key: string,
+    ttlMs: number,
+  ): Promise<{ count: number; ttlMs: number }> {
+    this.evictExpired(key);
+
+    const existing = this.entries.get(key);
+    const count = existing === undefined ? 1 : Number(existing.value) + 1;
+    const expiresAt = existing?.expiresAt ?? Date.now() + ttlMs;
+
+    this.entries.set(key, {
+      value: String(count),
+      expiresAt,
+    });
+
+    return {
+      count,
+      ttlMs: Math.max(expiresAt - Date.now(), 1),
+    };
   }
 }

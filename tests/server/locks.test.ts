@@ -23,4 +23,16 @@ describe('lock helpers', () => {
     expect(released).toBe(true);
     expect(thirdLock).not.toBeNull();
   });
+
+  it('does not release a lock owned by a different token', async () => {
+    const store = new MemoryKeyValueStore();
+    const key = buildWorkflowLockKey('owner-user-id', 'daily-learning');
+    const lock = await acquireLock(store, key, 5000);
+
+    expect(lock).not.toBeNull();
+    await store.set(key, 'replacement-owner', { ttlMs: 5000 });
+
+    await expect(releaseLock(store, lock!)).resolves.toBe(false);
+    await expect(store.get(key)).resolves.toBe('replacement-owner');
+  });
 });

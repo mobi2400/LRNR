@@ -37,6 +37,11 @@ export const jobRuns = table(
       table.status,
       table.createdAt,
     ),
+    userTypeCreatedLookup: index('job_runs_user_type_created_idx').on(
+      table.userId,
+      table.jobType,
+      table.createdAt,
+    ),
     idempotencyUnique: uniqueIndex('job_runs_idempotency_idx').on(
       table.userId,
       table.idempotencyKey,

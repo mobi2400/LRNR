@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db, type DbClient } from '@/db/client';
@@ -169,21 +169,23 @@ export function createJobsRepository(database: DbClient = db) {
     ): Promise<JobRunRecord[]> {
       const validatedActor = assertDbActor(actor);
       const validatedInput = listByTypeInputSchema.parse(input);
+      const conditions = [
+        eq(jobRuns.userId, validatedActor.userId),
+        eq(jobRuns.jobType, validatedInput.jobType),
+      ];
+
+      if (validatedInput.statuses !== undefined) {
+        conditions.push(inArray(jobRuns.status, validatedInput.statuses));
+      }
+
       const rows = await database
         .select()
         .from(jobRuns)
-        .where(eq(jobRuns.userId, validatedActor.userId));
+        .where(and(...conditions))
+        .orderBy(desc(jobRuns.createdAt))
+        .limit(validatedInput.limit);
 
-      return rows
-        .map(parseJobRunRow)
-        .filter((row) => row.jobType === validatedInput.jobType)
-        .filter((row) =>
-          validatedInput.statuses === undefined
-            ? true
-            : validatedInput.statuses.includes(row.status),
-        )
-        .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
-        .slice(0, validatedInput.limit);
+      return rows.map(parseJobRunRow);
     },
   };
 }

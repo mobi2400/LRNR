@@ -1,10 +1,11 @@
 import type { KeyValueStore } from '@/lib/redis';
+import { serverConfig } from '@/server/config';
 import { RateLimitAppError } from '@/server/errors';
 import { assertServerOnly } from '@/utils/server-only';
 
 assertServerOnly('src/server/rate-limit.ts');
 
-const RATE_LIMIT_PREFIX = 'lrnr:rate-limit';
+const RATE_LIMIT_PREFIX = `lrnr:v1:${serverConfig.nodeEnv}:rate-limit`;
 
 export interface RateLimitPolicy {
   scope: string;
@@ -19,11 +20,6 @@ export interface RateLimitResult {
   retryAfterSeconds: number;
 }
 
-interface FixedWindowState {
-  count: number;
-  resetAt: number;
-}
-
 export function buildRateLimitKey(scope: string, actorKey: string): string {
   return `${RATE_LIMIT_PREFIX}:${scope}:${actorKey}`;
 }
@@ -34,38 +30,16 @@ export async function checkRateLimit(
   policy: RateLimitPolicy,
   now = Date.now(),
 ): Promise<RateLimitResult> {
-  const currentState = await store.get(key);
-  const parsedState =
-    currentState === null
-      ? null
-      : (JSON.parse(currentState) as FixedWindowState);
+  const counter = await store.incrementWithTtl(key, policy.windowMs);
+  const resetAt = now + counter.ttlMs;
 
-  const nextState =
-    parsedState === null || parsedState.resetAt <= now
-      ? {
-          count: 1,
-          resetAt: now + policy.windowMs,
-        }
-      : {
-          count: parsedState.count + 1,
-          resetAt: parsedState.resetAt,
-        };
-
-  const retryAfterSeconds = Math.max(
-    1,
-    Math.ceil((nextState.resetAt - now) / 1000),
-  );
-
-  await store.set(key, JSON.stringify(nextState), {
-    ttlMs: Math.max(nextState.resetAt - now, 1),
-  });
-
-  const remaining = Math.max(policy.limit - nextState.count, 0);
+  const retryAfterSeconds = Math.max(1, Math.ceil(counter.ttlMs / 1000));
+  const remaining = Math.max(policy.limit - counter.count, 0);
 
   return {
-    allowed: nextState.count <= policy.limit,
+    allowed: counter.count <= policy.limit,
     remaining,
-    resetAt: nextState.resetAt,
+    resetAt,
     retryAfterSeconds,
   };
 }

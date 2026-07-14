@@ -432,3 +432,23 @@ a {
   background: rgba(163, 45, 45, 0.12);
   color: #8b2222;
 }
+
+.lesson-section {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 1rem;
+}
+
+.lesson-section h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.lesson-code {
+  overflow-x: auto;
+  border-radius: 14px;
+  background: #1f2520;
+  color: #f8f1de;
+  padding: 1rem;
+  white-space: pre-wrap;
+}

@@ -2,11 +2,17 @@ import type { JSX } from 'react';
 
 import { AppShell } from '@/components/app-shell/AppShell';
 import { assertUnlockedOwnerSession, getSessionAccessState } from '@/server/session';
+import { getCurrentLesson } from '@/services/lesson.service';
 
 export default async function LessonReviewPage(): Promise<JSX.Element> {
   const state = await getSessionAccessState();
 
   assertUnlockedOwnerSession(state);
+
+  const currentLesson = await getCurrentLesson({
+    userId: state.userId,
+  });
+  const lesson = currentLesson.lesson;
 
   return (
     <AppShell
@@ -18,31 +24,39 @@ export default async function LessonReviewPage(): Promise<JSX.Element> {
         <header className="cockpit-hero cockpit-hero--compact">
           <div>
             <p className="cockpit-kicker">Lesson Review</p>
-            <h2>Review questions, hints, and recap space are ready for active recall.</h2>
+            <h2>{lesson === null ? 'No review is ready yet.' : `Review: ${lesson.title}`}</h2>
             <p>
-              This page is intentionally gentler than an exam screen. It exists to
-              help the owner restate ideas, spot gaps, and compare against expected points.
+              {lesson?.objective ??
+                `Current state: ${currentLesson.reasonIfEmpty ?? 'not_ready'}.`}
             </p>
           </div>
         </header>
-        <div className="cockpit-grid cockpit-grid--review">
+        {lesson === null ? (
           <article className="cockpit-panel cockpit-panel--primary">
-            <p className="cockpit-panel__label">Review flow</p>
-            <ol className="cockpit-list cockpit-list--ordered">
-              <li>read the recap</li>
-              <li>answer one question at a time</li>
-              <li>check hints only when needed</li>
-              <li>compare with the answer guide</li>
-            </ol>
+            <p className="cockpit-panel__label">Review status</p>
+            <p>Generate and persist the lesson first, then review questions will appear here.</p>
           </article>
-          <article className="cockpit-panel">
-            <p className="cockpit-panel__label">Answer surface</p>
-            <p>
-              The final answer box and saved-response history will connect here once
-              the lesson and evaluation backend flows are implemented.
-            </p>
-          </article>
-        </div>
+        ) : (
+          <div className="cockpit-grid cockpit-grid--review">
+            <article className="cockpit-panel cockpit-panel--primary">
+              <p className="cockpit-panel__label">Recap</p>
+              <h3>{lesson.mentalModel}</h3>
+              <p>{lesson.nextAction}</p>
+            </article>
+            {lesson.reviewQuestions.map((question, index) => (
+              <article className="cockpit-panel" key={question.id}>
+                <p className="cockpit-panel__label">Question {index + 1}</p>
+                <h3>{question.question}</h3>
+                <p>{question.hint}</p>
+                <ul className="cockpit-list">
+                  {question.expectedPoints.map((point) => (
+                    <li key={point}>{point}</li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
     </AppShell>
   );

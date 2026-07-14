@@ -1,0 +1,84 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  createCompactSessionSummary,
+  createLessonPayload,
+} from '@/agents/teaching/teaching-agent';
+import type { CurriculumSession } from '@/schemas/curriculum.schema';
+import type { TopicKnowledgeBaseRecord } from '@/db/knowledge.repo';
+
+const now = new Date('2026-01-01T00:00:00.000Z');
+
+const session: CurriculumSession = {
+  id: 'session-1',
+  dayNumber: 1,
+  title: 'Day 1: Tool use',
+  status: 'ready',
+  phase: 'foundation',
+  conceptsToCover: ['tool-use'],
+  masteryObjective: 'Explain why tools need typed boundaries.',
+  sourceRefs: ['lrnr://source'],
+  connectionToPrior: null,
+  tomorrowPreview: 'Next session introduces agent state.',
+  evaluationDue: false,
+};
+
+const knowledgeBase: TopicKnowledgeBaseRecord = {
+  id: '33333333-3333-3333-3333-333333333333',
+  userId: '22222222-2222-2222-2222-222222222222',
+  topicBriefId: '11111111-1111-1111-1111-111111111111',
+  topicSlug: 'agentic-ai-foundations',
+  sourceInventory: [
+    {
+      name: 'Topic brief',
+      url: 'lrnr://topic-briefs/11111111-1111-1111-1111-111111111111',
+      credibilityTier: 'tier_1',
+    },
+  ],
+  conceptMap: [
+    {
+      slug: 'tool-use',
+      title: 'Tool use',
+      orderingHint: 0,
+      provenance: [],
+    },
+  ],
+  claims: [],
+  limitations: [],
+  codePatterns: [],
+  versionNotes: [],
+  interviewPatterns: [],
+  metadata: {},
+  createdAt: now,
+  updatedAt: now,
+};
+
+describe('teaching agent', () => {
+  it('creates a structured frontend lesson payload', () => {
+    const lesson = createLessonPayload({
+      topicSlug: 'agentic-ai-foundations',
+      session,
+      knowledgeBase,
+    });
+
+    expect(lesson.generatedBy).toBe('teaching_node');
+    expect(lesson.reviewQuestions.length).toBeGreaterThan(0);
+    expect(lesson.sourceReferences[0]?.url).toContain('lrnr://topic-briefs');
+  });
+
+  it('creates a compact RAG summary instead of raw lesson text', () => {
+    const lesson = createLessonPayload({
+      topicSlug: 'agentic-ai-foundations',
+      session,
+      knowledgeBase,
+    });
+    const summary = createCompactSessionSummary({
+      lesson,
+      status: 'completed',
+    });
+
+    expect(summary).toContain('Session session-1 completed.');
+    expect(summary).toContain('Review questions:');
+    expect(summary).not.toContain(lesson.explanation[0]?.body ?? '');
+  });
+});

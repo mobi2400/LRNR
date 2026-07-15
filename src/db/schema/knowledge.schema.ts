@@ -5,6 +5,7 @@ import {
   integer,
   jsonb,
   numeric,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -242,4 +243,75 @@ export const sourceChunks = table(
     ),
   }),
 );
+export const sourceClaims = table(
+  'source_claims',
+  {
+    ...userScopedColumns,
+    documentId: uuid('document_id').references(() => sourceDocuments.id),
+    chunkId: uuid('chunk_id').references(() => sourceChunks.id),
+    claimText: text('claim_text').notNull(),
+    claimHash: text('claim_hash').notNull(),
+    confidence: numeric('confidence', { precision: 5, scale: 4 }).default('0.8000').notNull(),
+    metadata: jsonb('metadata').default(jsonbObjectDefault).notNull(),
+  },
+  (table) => ({
+    userClaimHashUnique: uniqueIndex('source_claims_user_claim_hash_idx').on(table.userId, table.claimHash),
+    userDocumentLookup: index('source_claims_user_document_idx').on(table.userId, table.documentId),
+  }),
+);
 
+export const sourceChunkConcepts = table(
+  'source_chunk_concepts',
+  {
+    userId: uuid('user_id').notNull(),
+    chunkId: uuid('chunk_id')
+      .notNull()
+      .references(() => sourceChunks.id, { onDelete: 'cascade' }),
+    conceptId: uuid('concept_id').notNull(),
+    conceptSlug: text('concept_slug').notNull(),
+    relationType: text('relation_type').default('mentions').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.chunkId, table.conceptSlug], name: 'source_chunk_concepts_pk' }),
+    userConceptLookup: index('source_chunk_concepts_user_concept_idx').on(table.userId, table.conceptSlug),
+  }),
+);
+
+export const claimSources = table(
+  'claim_sources',
+  {
+    userId: uuid('user_id').notNull(),
+    claimId: uuid('claim_id')
+      .notNull()
+      .references(() => sourceClaims.id, { onDelete: 'cascade' }),
+    chunkId: uuid('chunk_id')
+      .notNull()
+      .references(() => sourceChunks.id, { onDelete: 'cascade' }),
+    supportType: text('support_type').default('supports').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.claimId, table.chunkId], name: 'claim_sources_pk' }),
+    userClaimLookup: index('claim_sources_user_claim_idx').on(table.userId, table.claimId),
+  }),
+);
+
+export const contradictionClaims = table(
+  'contradiction_claims',
+  {
+    userId: uuid('user_id').notNull(),
+    claimId: uuid('claim_id')
+      .notNull()
+      .references(() => sourceClaims.id, { onDelete: 'cascade' }),
+    contradictsClaimId: uuid('contradicts_claim_id')
+      .notNull()
+      .references(() => sourceClaims.id, { onDelete: 'cascade' }),
+    reason: text('reason'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.claimId, table.contradictsClaimId], name: 'contradiction_claims_pk' }),
+    userClaimLookup: index('contradiction_claims_user_claim_idx').on(table.userId, table.claimId),
+  }),
+);

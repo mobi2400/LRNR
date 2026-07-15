@@ -100,3 +100,5 @@ Teaching and RAG-facing outputs must refuse or pause when claims are unsupported
 
 Every workflow and node event must include request ID, workflow ID, node name, status, attempt number, retry classification, lease expiry where relevant, and safe error code. Logs must not include raw prompts, source text, secrets, cookies, auth headers, or raw learner memory.
 
+Phase 1 deployment gates must fail when terminal node failures or stale running leases are present. Reliability reports should be derived from redacted workflow events so the owner can debug orchestration without exposing private prompts or raw source context.
+

@@ -29,6 +29,13 @@
       "when": 1784070000000,
       "tag": "0003_bounded_cursor_pagination",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784071790806,
+      "tag": "0004_smart_frank_castle",
+      "breakpoints": true
     }
   ]
 }

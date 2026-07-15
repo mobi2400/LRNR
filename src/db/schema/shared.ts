@@ -47,6 +47,15 @@ export const notificationChannelEnum = pgEnum('notification_channel', [
   'push',
 ]);
 
+export const sourceTypeEnum = pgEnum('source_type', [
+  'article',
+  'markdown',
+  'transcript',
+  'code_documentation',
+  'claim',
+  'learner_history',
+]);
+
 export const ragEventTypeEnum = pgEnum('rag_event_type', [
   'onboarding_response',
   'session_summary',
@@ -105,3 +114,4 @@ export const vector = customType<{
 });
 
 export const sourceAgentColumn = text('source_agent').notNull();
+

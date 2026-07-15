@@ -1,4 +1,4 @@
-﻿# LRNR RAG Industry Readiness Implementation Plan
+# LRNR RAG Industry Readiness Implementation Plan
 
 > Phase 0 baseline created before runtime changes. This document tracks the RAG hardening sequence from the July 2026 readiness instructions and should be updated when implementation reality changes.
 
@@ -8,7 +8,7 @@
 - Baseline verification: `npm run typecheck` passed.
 - Code graph discovery was attempted first. The graph is currently sparse for newer RAG code, so targeted file reads were used for exact repository/schema details.
 - Current learner-memory RAG centers on `rag_memory` in `src/db/schema/knowledge.schema.ts` and `src/db/rag.repo.ts`.
-- Current source knowledge is stored mostly as JSON in `topic_knowledge_base`; normalized `source_documents` and `source_chunks` tables are not present yet.
+- Current source knowledge is stored mostly as JSON in `topic_knowledge_base`; Phase 1 adds normalized `source_documents` and `source_chunks` schema plus pure ingestion/chunking drafts for future repository wiring.
 
 ## Current RAG Call Path Map
 
@@ -28,8 +28,8 @@
 
 | Requirement | Current implementation | Gap | Proposed module/change | Schema impact | Test requirement | Priority |
 | --- | --- | --- | --- | --- | --- | --- |
-| Secure source ingestion | No dedicated ingestion pipeline. | URL/network/content controls, parsing, normalization, dedupe, prompt-injection handling absent. | `src/rag/ingestion/*` service plus repository writes. | Add normalized source document/chunk tables. | URL policy, content limits, parser, dedupe, and injection-neutralization tests. | P1 |
-| Citation-preserving chunks | `rag_memory` has chunk-ish fields but no source chunk table. | Source boundaries, anchors, heading paths, and chunk strategy metadata are missing. | Chunker modules for markdown/article/transcript/code/claim inputs. | Add explicit `source_chunks` columns for citation and embedding metadata. | Deterministic chunking and boundary-preservation tests. | P1 |
+| Secure source ingestion | Phase 1 adds an injectable ingestion planner with URL/network/content controls, HTML stripping, normalization, hashing, prompt-injection neutralization, and chunk draft creation. | Repository persistence and embedding handoff still need later phase wiring. | `src/rag/ingestion/source-ingestion.ts`. | Adds normalized source document/chunk tables. | URL policy, redirect, content type, and chunk plan tests. | P1 |
+| Citation-preserving chunks | Phase 1 adds deterministic heading-aware chunk drafts with anchors, hashes, section paths, token estimates, and quality diagnostics. | Transcript/code/claim specialized chunkers can be refined after measured baseline. | `src/rag/ingestion/chunking.ts`. | Adds explicit `source_chunks` columns for citation and embedding metadata. | Deterministic chunking and boundary-preservation tests. | P1 |
 | Embedding wrapper | Env has `EMBEDDING_API_KEY`; no production wrapper/model registry. | No timeout/retry/version/dimension guard. | `src/server/embeddings/*` server-only provider wrapper and registry. | Store model/version/dimensions on source chunks and memory writes as needed. | Wrapper validation and incompatible-version tests. | P1 |
 | Hybrid retrieval controller | Repository has `retrieveContext()` with scoped lexical/vector queries. | No central controller, RRF, rerank, confidence, refinement, or context packing. | `src/rag/retrieval/*` orchestration over repositories. | Likely no immediate schema change beyond source chunk support. | Cross-user isolation, lexical/vector, version isolation, RRF, rerank, confidence tests. | P1 |
 | Lexical ranking | GIN index exists for `rag_memory`; runtime lexical query uses `ilike`. | GIN index is not used for ranking. | PostgreSQL full-text query helpers with ts_rank. | Add matching indexes for source chunks. | Query SQL/source tests and ranking fixtures. | P1 |
@@ -64,3 +64,4 @@
 - PostgreSQL/pgvector remains authoritative for Phase 1; do not add a graph DB or separate vector DB without measured evidence.
 - Every retrieval query must apply authenticated user scope inside the repository/query, not only at caller level.
 - Never log raw learner memory, private prompts, full source text, secrets, cookies, or authorization headers.
+

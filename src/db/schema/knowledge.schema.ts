@@ -17,6 +17,7 @@ import {
   jsonbObjectDefault,
   ragEventTypeEnum,
   sourceAgentColumn,
+  sourceTypeEnum,
   table,
   userScopedColumns,
   vector,
@@ -128,3 +129,117 @@ export const ragMemory = table(
     ),
   }),
 );
+export const sourceDocuments = table(
+  'source_documents',
+  {
+    ...userScopedColumns,
+    topicId: uuid('topic_id'),
+    topicSlug: text('topic_slug'),
+    sourceId: uuid('source_id'),
+    sourceType: sourceTypeEnum('source_type').notNull(),
+    title: text('title').notNull(),
+    canonicalUrl: text('canonical_url'),
+    author: text('author'),
+    publisher: text('publisher'),
+    language: text('language').default('en').notNull(),
+    permissionScope: text('permission_scope').default('owner_private').notNull(),
+    contentHash: text('content_hash').notNull(),
+    normalizedContentHash: text('normalized_content_hash').notNull(),
+    documentVersion: text('document_version').default('v1').notNull(),
+    effectiveAt: timestamp('effective_at', { withTimezone: true }),
+    retrievedAt: timestamp('retrieved_at', { withTimezone: true }),
+    ingestedAt: timestamp('ingested_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    freshnessAt: timestamp('freshness_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    supersededById: uuid('superseded_by_id'),
+    sourceQualityScore: numeric('source_quality_score', {
+      precision: 5,
+      scale: 4,
+    }),
+    metadata: jsonb('metadata').default(jsonbObjectDefault).notNull(),
+  },
+  (table) => ({
+    userTopicLookup: index('source_documents_user_topic_idx').on(
+      table.userId,
+      table.topicSlug,
+      table.createdAt,
+      table.id,
+    ),
+    contentDedupe: uniqueIndex('source_documents_user_normalized_hash_idx').on(
+      table.userId,
+      table.normalizedContentHash,
+    ),
+    canonicalUrlLookup: index('source_documents_canonical_url_idx').on(
+      table.userId,
+      table.canonicalUrl,
+    ),
+  }),
+);
+
+export const sourceChunks = table(
+  'source_chunks',
+  {
+    ...userScopedColumns,
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => sourceDocuments.id),
+    topicId: uuid('topic_id'),
+    topicSlug: text('topic_slug'),
+    conceptId: uuid('concept_id'),
+    conceptSlug: text('concept_slug'),
+    curriculumLayer: text('curriculum_layer'),
+    agentOwner: sourceAgentColumn,
+    chunkStrategy: text('chunk_strategy').notNull(),
+    chunkStrategyVersion: text('chunk_strategy_version').notNull(),
+    chunkIndex: integer('chunk_index').notNull(),
+    parentChunkId: uuid('parent_chunk_id'),
+    sectionHeading: text('section_heading'),
+    sectionPath: text('section_path'),
+    retrievalText: text('retrieval_text').notNull(),
+    synthesisText: text('synthesis_text'),
+    tokenCount: integer('token_count').notNull(),
+    contentHash: text('content_hash').notNull(),
+    citationAnchor: text('citation_anchor').notNull(),
+    characterStart: integer('character_start'),
+    characterEnd: integer('character_end'),
+    embedding: vector('embedding', { dimensions: 1536 }),
+    embeddingModel: text('embedding_model'),
+    embeddingVersion: text('embedding_version'),
+    embeddingDimensions: integer('embedding_dimensions'),
+    sourceQualityScore: numeric('source_quality_score', {
+      precision: 5,
+      scale: 4,
+    }),
+    freshnessAt: timestamp('freshness_at', { withTimezone: true }),
+    metadata: jsonb('metadata').default(jsonbObjectDefault).notNull(),
+  },
+  (table) => ({
+    documentChunkUnique: uniqueIndex('source_chunks_document_chunk_idx').on(
+      table.documentId,
+      table.chunkIndex,
+    ),
+    userTopicLookup: index('source_chunks_user_topic_idx').on(
+      table.userId,
+      table.topicSlug,
+      table.createdAt,
+      table.id,
+    ),
+    userConceptLookup: index('source_chunks_user_concept_idx').on(
+      table.userId,
+      table.conceptSlug,
+      table.createdAt,
+      table.id,
+    ),
+    contentDedupe: uniqueIndex('source_chunks_user_content_hash_idx').on(
+      table.userId,
+      table.contentHash,
+    ),
+    lexicalSearchIdx: index('source_chunks_lexical_idx').using(
+      'gin',
+      sql`to_tsvector('english', ${table.retrievalText})`,
+    ),
+  }),
+);
+

@@ -92,6 +92,10 @@ delivery:{userId}:{sessionId}:lesson-ready
 rag-session-summary:{userId}:{sessionId}:{lessonRevision}
 ```
 
+## Grounding And Citation Accuracy
+
+Teaching and RAG-facing outputs must refuse or pause when claims are unsupported, evidence confidence is below the configured threshold, cited URLs are not present in the evidence pack, or embedding versions are incompatible. Citations are not decorative; they must point to evidence that supports the exact learner-facing claim.
+
 ## Observability Contract
 
 Every workflow and node event must include request ID, workflow ID, node name, status, attempt number, retry classification, lease expiry where relevant, and safe error code. Logs must not include raw prompts, source text, secrets, cookies, auth headers, or raw learner memory.

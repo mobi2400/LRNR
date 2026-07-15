@@ -48,6 +48,10 @@ Node statuses:
 - `failed_retryable`: node failed with retryable classification.
 - `failed_terminal`: node failed permanently.
 
+## Semantic Quality Gates
+
+Schema validation is necessary but not sufficient. Phase 1 agent outputs must pass semantic gates for usable concepts, source provenance, curriculum coverage, exactly one ready session, non-placeholder lesson explanations, and source references. A gate failure must be recorded as a safety/quality failure instead of being silently accepted because the JSON shape looked valid.
+
 ## Retry And Failure Semantics
 
 Every node policy must state whether the node is critical, retryable, and side-effecting.

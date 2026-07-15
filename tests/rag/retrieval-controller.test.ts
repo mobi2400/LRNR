@@ -84,5 +84,6 @@ describe('RAG retrieval controller', () => {
     expect(pack.trace.normalizedQuery).toBe('What is hybrid retrieval?');
     expect(pack.trace.inferredIntent).toBe('answer_followup');
     expect(pack.items[0]?.rankingSignals.qualityScore).toBe(0.9);
+    expect(pack.confidence.decision).toBe('refine');
   });
 });

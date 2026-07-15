@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { ragRepository, type RagRetrievalResult } from '@/db/rag.repo';
 import { embeddingModelRegistry, embeddingModelIdSchema, embedTexts } from '@/lib/embeddings';
+import { decideRagConfidence, rerankDeterministically, ragConfidenceDecisionSchema } from './rerank';
 
 const ragAgentSchema = z.enum(['architect', 'cartographer', 'curriculum_builder', 'teaching', 'evaluation', 'system']);
 const ragIntentSchema = z.enum(['learn', 'review', 'answer_followup', 'diagnose_gap', 'research']);
@@ -68,6 +69,10 @@ export const ragRetrievalTraceSchema = z.object({
 export const ragContextPackSchema = z.object({
   requestId: z.string(),
   items: z.array(ragContextItemSchema),
+  confidence: z.object({
+    decision: ragConfidenceDecisionSchema,
+    reasons: z.array(z.string()),
+  }),
   trace: ragRetrievalTraceSchema,
 });
 
@@ -189,25 +194,30 @@ export async function retrieveRagContext(
     vectorIds: result.items.map((item) => item.id),
   });
 
+  const contextItems = result.items.map((item) => {
+    const signals = fused.get(item.id) ?? { lexicalRank: null, vectorRank: null, rrfScore: item.score };
+
+    return {
+      id: item.id,
+      content: item.content,
+      sourceUri: item.sourceUri,
+      topicSlug: item.topicSlug,
+      conceptSlug: item.conceptSlug,
+      embeddingVersion: item.embeddingVersion,
+      rankingSignals: {
+        ...signals,
+        recencyScore: item.createdAt.getTime(),
+        qualityScore: Number(item.confidence),
+      },
+    };
+  });
+  const rerankedItems = rerankDeterministically(contextItems);
+  const confidence = decideRagConfidence({ riskLevel: validated.riskLevel, items: rerankedItems });
+
   return ragContextPackSchema.parse({
     requestId: validated.requestId,
-    items: result.items.map((item) => {
-      const signals = fused.get(item.id) ?? { lexicalRank: null, vectorRank: null, rrfScore: item.score };
-
-      return {
-        id: item.id,
-        content: item.content,
-        sourceUri: item.sourceUri,
-        topicSlug: item.topicSlug,
-        conceptSlug: item.conceptSlug,
-        embeddingVersion: item.embeddingVersion,
-        rankingSignals: {
-          ...signals,
-          recencyScore: item.createdAt.getTime(),
-          qualityScore: Number(item.confidence),
-        },
-      };
-    }),
+    items: rerankedItems,
+    confidence,
     trace: {
       requestId: validated.requestId,
       normalizedQuery,

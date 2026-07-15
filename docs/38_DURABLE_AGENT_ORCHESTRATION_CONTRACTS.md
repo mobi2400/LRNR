@@ -8,6 +8,10 @@ Layer 1 roadmap ownership belongs to the Curriculum Builder only. Architect may 
 
 Telegram is alerting only. The frontend is the learning cockpit. Backend orchestration owns workflow state, locks, durable checkpoints, idempotency keys, and side-effect ordering.
 
+## Tool Binding Contract
+
+Phase 1 nodes may only request wrapper-level capabilities from the orchestration registry. Agents must not request raw database clients, raw LLM SDKs, raw embedding SDKs, raw Telegram SDKs, or raw Redis clients. Delivery side effects use the outbox wrapper; RAG side effects use the RAG memory repository; agent nodes receive only the capabilities needed for their node boundary.
+
 ## Lesson Lifecycle
 
 A lesson has three separate lifecycle concepts:

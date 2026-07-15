@@ -77,3 +77,39 @@ export const apiIdempotencyKeys = table(
     ),
   }),
 );
+export const workflowNodeRuns = table(
+  'workflow_node_runs',
+  {
+    ...userScopedColumns,
+    workflowRunId: text('workflow_run_id').notNull(),
+    nodeName: text('node_name').notNull(),
+    status: text('status').default('pending').notNull(),
+    attempt: integer('attempt').default(0).notNull(),
+    maxAttempts: integer('max_attempts').default(1).notNull(),
+    input: jsonb('input').default(jsonbObjectDefault).notNull(),
+    output: jsonb('output'),
+    error: jsonb('error'),
+    leaseOwner: text('lease_owner'),
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    idempotencyKey: text('idempotency_key'),
+  },
+  (table) => ({
+    userWorkflowNodeUnique: uniqueIndex('workflow_node_runs_user_workflow_node_idx').on(
+      table.userId,
+      table.workflowRunId,
+      table.nodeName,
+    ),
+    claimLookup: index('workflow_node_runs_claim_idx').on(
+      table.userId,
+      table.status,
+      table.leaseExpiresAt,
+      table.updatedAt,
+    ),
+    idempotencyUnique: uniqueIndex('workflow_node_runs_idempotency_idx').on(
+      table.userId,
+      table.idempotencyKey,
+    ),
+  }),
+);

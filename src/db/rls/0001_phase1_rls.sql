@@ -86,3 +86,11 @@ for all
 to authenticated
 using (auth.uid() = user_id::uuid)
 with check (auth.uid() = user_id::uuid);
+alter table workflow_node_runs enable row level security;
+
+create policy "workflow_node_runs_owner_policy"
+on workflow_node_runs
+for all
+to authenticated
+using (auth.uid() = user_id::uuid)
+with check (auth.uid() = user_id::uuid);

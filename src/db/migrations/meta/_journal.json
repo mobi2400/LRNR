@@ -43,6 +43,13 @@
       "when": 1784098276918,
       "tag": "0005_rapid_gertrude_yorkes",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784100518024,
+      "tag": "0006_curved_butterfly",
+      "breakpoints": true
     }
   ]
 }

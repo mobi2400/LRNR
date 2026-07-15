@@ -12,6 +12,7 @@ import type {
   topicBriefs,
   topicKnowledgeBase,
   userProfile,
+  workflowNodeRuns,
 } from '@/db/schema';
 
 export type UserProfileRow = InferSelectModel<typeof userProfile>;
@@ -58,3 +59,6 @@ export type ConceptPrerequisiteRow = InferSelectModel<
 export type NewConceptPrerequisiteRow = InferInsertModel<
   typeof conceptPrerequisites
 >;
+
+export type WorkflowNodeRunRow = InferSelectModel<typeof workflowNodeRuns>;
+export type NewWorkflowNodeRunRow = InferInsertModel<typeof workflowNodeRuns>;

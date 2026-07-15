@@ -61,6 +61,7 @@ A resumed workflow must load persisted node checkpoints before running any node.
 The production queue contract is BullMQ-compatible: API handlers enqueue a validated workflow payload with a stable job ID and return promptly. Workers must acquire a fenced workflow lock before inspecting checkpoints, renew the lease before executing the selected node, and release the lease during safe shutdown or after node completion. Duplicate queue deliveries must converge on the same job ID and must not duplicate side effects.
 
 Redis/BullMQ is acceleration and coordination, not the source of truth. If Redis is unavailable, the API should fail safely or record a retryable queue error; persisted node checkpoints remain authoritative. If a worker crashes after claiming a node, another worker may recover only after the lease expires and must replay from the persisted checkpoint/idempotency key instead of trusting queue memory.
+
 ## Side-Effect Ordering
 
 The Phase 1 spine is:
@@ -86,5 +87,4 @@ rag-session-summary:{userId}:{sessionId}:{lessonRevision}
 ## Observability Contract
 
 Every workflow and node event must include request ID, workflow ID, node name, status, attempt number, retry classification, lease expiry where relevant, and safe error code. Logs must not include raw prompts, source text, secrets, cookies, auth headers, or raw learner memory.
-
 

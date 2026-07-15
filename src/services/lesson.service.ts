@@ -40,6 +40,10 @@ import { assertIdempotencyReplay, type AnyApiEnvelope } from '@/server/idempoten
 const IDEMPOTENCY_TTL_MS = 1000 * 60 * 60 * 24;
 const lessonCacheStore = new RedisKeyValueStore();
 
+export function buildLessonGenerationKey(input: { userId: string; sessionId: string; curriculumRevision: number }): string {
+  return ['lesson-generate', input.userId, input.sessionId, String(input.curriculumRevision)].join(':');
+}
+
 function getCurrentSession(
   sessions: unknown[],
   currentSessionId: string | null,
@@ -126,15 +130,26 @@ export async function generateAndPersistCurrentLesson(
     knowledgeBase,
   });
 
-  await curriculumRepository.saveGeneratedLesson(actor, topicSlug, {
-    sessionId: currentSession.id,
-    lesson,
-  });
-  await curriculumRepository.updateSessionStatus(actor, topicSlug, {
-    sessionId: currentSession.id,
-    status: 'delivered',
-    deliveredAt: new Date(),
-  });
+  try {
+    await curriculumRepository.saveGeneratedLesson(actor, topicSlug, {
+      sessionId: currentSession.id,
+      lesson,
+      expectedRevision: curriculum.revision,
+    });
+  } catch (error) {
+    if (error instanceof AppError && error.code === 'CONFLICT') {
+      const replay = await loadCurrentCurriculum(actor);
+      const replaySession = replay.curriculum === null
+        ? null
+        : getCurrentSession(replay.curriculum.layer2Sessions, currentSession.id);
+
+      if (replaySession?.lesson !== undefined) {
+        return lessonPayloadSchema.parse(replaySession.lesson);
+      }
+    }
+
+    throw error;
+  }
 
   return lesson;
 }

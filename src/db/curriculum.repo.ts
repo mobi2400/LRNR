@@ -59,6 +59,7 @@ const sessionStatusUpdateSchema = z.object({
 const lessonSaveSchema = z.object({
   sessionId: z.string().trim().min(1),
   lesson: jsonObjectSchema,
+  expectedRevision: z.number().int().positive().optional(),
 });
 
 const currentSessionPointerSchema = z.object({
@@ -133,6 +134,7 @@ export function applyLessonToSession(
 
     return {
       ...session,
+      status: 'ready' as const,
       lesson: input.lesson,
     };
   });
@@ -380,8 +382,25 @@ export function createCurriculumRepository(database: DbClient = db) {
           revision: currentState.revision + 1,
           ...buildUpdatedAtPatch(),
         })
-        .where(eq(curriculumState.id, currentState.id))
+        .where(
+          validatedInput.expectedRevision === undefined
+            ? eq(curriculumState.id, currentState.id)
+            : and(
+                eq(curriculumState.id, currentState.id),
+                eq(curriculumState.userId, validatedActor.userId),
+                eq(curriculumState.revision, validatedInput.expectedRevision),
+              ),
+        )
         .returning();
+
+      if (row === undefined && validatedInput.expectedRevision !== undefined) {
+        throw new AppError({
+          code: 'CONFLICT',
+          message: 'Curriculum revision conflict while saving generated lesson.',
+          status: 409,
+          details: { expectedRevision: validatedInput.expectedRevision },
+        });
+      }
 
       return parseCurriculumRow(
         requireMutationRow(row, 'Curriculum lesson update did not return a row.'),

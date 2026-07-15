@@ -18,6 +18,8 @@ This file answers:
 
 This file supersedes older Telegram-first graph assumptions.
 
+Durable lifecycle, retry, resume, idempotency, and ready/delivered/completed definitions are canonical in docs/38_DURABLE_AGENT_ORCHESTRATION_CONTRACTS.md.
+
 Current product direction:
 
 ```text

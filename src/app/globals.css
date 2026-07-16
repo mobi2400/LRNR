@@ -899,6 +899,92 @@ button:disabled,
   white-space: pre;
 }
 
+.review-layout {
+  display: grid;
+  gap: var(--lrnr-space-5);
+  max-width: 880px;
+}
+
+.review-recap {
+  border-left: 4px solid var(--lrnr-primary);
+}
+
+.review-recap h2 {
+  margin: 0;
+  color: var(--lrnr-text-primary);
+  font-size: clamp(1.35rem, 3vw, 2rem);
+  line-height: 1.15;
+}
+
+.review-question-list {
+  display: grid;
+  gap: var(--lrnr-space-5);
+}
+
+.review-question-card {
+  display: grid;
+  gap: var(--lrnr-space-4);
+}
+
+.review-question-card h3 {
+  max-width: var(--lrnr-reading-max);
+  font-size: clamp(1.2rem, 2.5vw, 1.55rem);
+  line-height: 1.25;
+}
+
+.review-disclosure {
+  border: 1px solid var(--lrnr-border-soft);
+  border-radius: var(--lrnr-radius-control);
+  background: var(--lrnr-surface-muted);
+  padding: var(--lrnr-space-3) var(--lrnr-space-4);
+}
+
+.review-disclosure summary {
+  cursor: pointer;
+  color: var(--lrnr-primary);
+  font-weight: 800;
+}
+
+.review-answer {
+  width: 100%;
+  min-height: 180px;
+  resize: vertical;
+  border: 1px solid var(--lrnr-border-soft);
+  border-radius: var(--lrnr-radius-card);
+  background: var(--lrnr-surface-raised);
+  color: var(--lrnr-text-primary);
+  line-height: 1.65;
+  padding: var(--lrnr-space-4);
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--lrnr-space-3);
+}
+
+.review-warning {
+  margin: 0;
+  color: var(--lrnr-warning);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.review-guide {
+  border: 1px solid color-mix(in srgb, var(--lrnr-info) 20%, transparent);
+  border-radius: var(--lrnr-radius-card);
+  background: var(--lrnr-info-soft);
+  padding: var(--lrnr-space-4);
+}
+
+.review-guide[hidden] {
+  display: none;
+}
+
+.review-guide .cockpit-panel__label {
+  color: var(--lrnr-info);
+}
 .lesson-page__header {
   align-items: flex-start;
 }

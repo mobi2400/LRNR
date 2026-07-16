@@ -1,7 +1,13 @@
 import type { JSX } from 'react';
 
+import Link from 'next/link';
+
 import { AppShell } from '@/components/app-shell/AppShell';
-import { assertUnlockedOwnerSession, getSessionAccessState } from '@/server/session';
+import { GuidedReviewQuestion } from '@/components/lesson/GuidedReviewQuestion';
+import {
+  assertUnlockedOwnerSession,
+  getSessionAccessState,
+} from '@/server/session';
 import { getCurrentLesson } from '@/services/lesson.service';
 
 export default async function LessonReviewPage(): Promise<JSX.Element> {
@@ -20,41 +26,64 @@ export default async function LessonReviewPage(): Promise<JSX.Element> {
       identity={state.email ?? state.userId}
       unlockExpiresAt={state.unlockedUntil}
     >
-      <section className="cockpit-page">
-        <header className="cockpit-hero cockpit-hero--compact">
+      <section
+        className="cockpit-page review-page"
+        aria-labelledby="review-title"
+      >
+        <header className="cockpit-page-header">
           <div>
-            <p className="cockpit-kicker">Lesson Review</p>
-            <h2>{lesson === null ? 'No review is ready yet.' : `Review: ${lesson.title}`}</h2>
+            <p className="cockpit-kicker">Guided review</p>
+            <h1 id="review-title">
+              {lesson === null
+                ? 'No review is ready yet.'
+                : `Review: ${lesson.title}`}
+            </h1>
             <p>
               {lesson?.objective ??
                 `Current state: ${currentLesson.reasonIfEmpty ?? 'not_ready'}.`}
             </p>
           </div>
+          <Link
+            className="workspace-button workspace-button--secondary"
+            href="/lesson/current"
+          >
+            Back to lesson
+          </Link>
         </header>
+
         {lesson === null ? (
-          <article className="cockpit-panel cockpit-panel--primary">
+          <article className="cockpit-panel empty-state" aria-live="polite">
             <p className="cockpit-panel__label">Review status</p>
-            <p>Generate and persist the lesson first, then review questions will appear here.</p>
+            <h2>Review unlocks after a lesson is persisted.</h2>
+            <p>
+              LRNR keeps review tied to the current lesson payload. Once the
+              lesson exists, the questions and guide will appear here.
+            </p>
+            <Link className="workspace-button" href="/dashboard">
+              Return to Today
+            </Link>
           </article>
         ) : (
-          <div className="cockpit-grid cockpit-grid--review">
-            <article className="cockpit-panel cockpit-panel--primary">
-              <p className="cockpit-panel__label">Recap</p>
-              <h3>{lesson.mentalModel}</h3>
+          <div className="review-layout">
+            <article className="cockpit-panel review-recap">
+              <p className="cockpit-panel__label">
+                Before you answer, remember this
+              </p>
+              <h2>{lesson.mentalModel}</h2>
               <p>{lesson.nextAction}</p>
             </article>
-            {lesson.reviewQuestions.map((question, index) => (
-              <article className="cockpit-panel" key={question.id}>
-                <p className="cockpit-panel__label">Question {index + 1}</p>
-                <h3>{question.question}</h3>
-                <p>{question.hint}</p>
-                <ul className="cockpit-list">
-                  {question.expectedPoints.map((point) => (
-                    <li key={point}>{point}</li>
-                  ))}
-                </ul>
-              </article>
-            ))}
+
+            <div className="review-question-list" aria-label="Review questions">
+              {lesson.reviewQuestions.map((question, index) => (
+                <GuidedReviewQuestion
+                  expectedPoints={question.expectedPoints}
+                  hint={question.hint}
+                  index={index}
+                  key={question.id}
+                  question={question.question}
+                />
+              ))}
+            </div>
           </div>
         )}
       </section>

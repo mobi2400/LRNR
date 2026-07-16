@@ -661,12 +661,43 @@ button:disabled,
   padding: clamp(28px, 5vw, 48px);
 }
 
-.dashboard-action h3 {
-  max-width: 620px;
-  margin-top: var(--lrnr-space-3);
+.dashboard-action h2 {
+  max-width: 640px;
+  margin: var(--lrnr-space-3) 0 0;
+  color: #ffffff;
   font-size: clamp(1.8rem, 4vw, 3rem);
+  line-height: 1.08;
 }
 
+.dashboard-action--workflow_failed {
+  background: linear-gradient(135deg, #7b332b, #4d2925);
+}
+
+.progress-card h2,
+.activity-card h2,
+.trust-card h2,
+.section-heading h2 {
+  margin: 0;
+  color: var(--lrnr-text-primary);
+  font-size: clamp(1.2rem, 2.2vw, 1.6rem);
+  line-height: 1.15;
+}
+
+.activity-card,
+.trust-card,
+.progress-card {
+  display: grid;
+  align-content: start;
+  gap: var(--lrnr-space-3);
+}
+
+.section-heading {
+  margin: var(--lrnr-space-6) 0 var(--lrnr-space-4);
+}
+
+.section-heading h2 {
+  max-width: 700px;
+}
 .dashboard-action p {
   max-width: 590px;
 }

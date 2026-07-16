@@ -1,31 +1,34 @@
 import type { JSX } from 'react';
 
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+
 import { AppShell } from '@/components/app-shell/AppShell';
+import { buildDashboardViewModel } from '@/components/dashboard/dashboard-view-model';
 import { OnboardingPanel } from '@/components/onboarding/OnboardingPanel';
-import { dashboardService } from '@/services/dashboard.service';
 import {
   assertUnlockedOwnerSession,
   clearSessionCookies,
   getSessionAccessState,
 } from '@/server/session';
-import { redirect } from 'next/navigation';
+import { dashboardService } from '@/services/dashboard.service';
 
 async function logoutAction(): Promise<void> {
   'use server';
-
   await clearSessionCookies();
   redirect('/login?error=signed-out');
 }
 
 export default async function DashboardPage(): Promise<JSX.Element> {
   const state = await getSessionAccessState();
-
   assertUnlockedOwnerSession(state);
 
   const dashboard = await dashboardService.getDashboard({
     userId: state.userId,
     requestId: 'dashboard-page',
   });
+  const viewModel = buildDashboardViewModel(dashboard);
+  const hasLearningPath = viewModel.mode !== 'no_goal';
 
   return (
     <AppShell
@@ -33,55 +36,134 @@ export default async function DashboardPage(): Promise<JSX.Element> {
       identity={state.email ?? state.userId}
       unlockExpiresAt={state.unlockedUntil}
     >
-      <section className="cockpit-page">
-        <header className="cockpit-hero">
+      <section className="cockpit-page" aria-labelledby="dashboard-title">
+        <header className="cockpit-page-header">
           <div>
-            <p className="cockpit-kicker">Learning Dashboard</p>
-            <h2>Start the Architect flow, then let the rest of Phase 1 build on grounded learner context.</h2>
+            <p className="cockpit-kicker">Today</p>
+            <h1 id="dashboard-title">
+              {hasLearningPath
+                ? 'Your next useful step is clear.'
+                : 'Build a learning path that starts where you are.'}
+            </h1>
             <p>
-              Frontend stays the cockpit. This onboarding loop now goes through protected
-              LRNR APIs and writes profile, topic brief, and compact learner-memory seed data.
+              {hasLearningPath
+                ? 'LRNR keeps the day focused: one lesson, one review path, and clear background activity.'
+                : 'Tell LRNR your goal once. It will map the first steps before asking you to study.'}
             </p>
           </div>
           <form action={logoutAction}>
-            <button className="workspace-button workspace-button--ghost" type="submit">
+            <button
+              className="workspace-button workspace-button--quiet"
+              type="submit"
+            >
               Sign out
             </button>
           </form>
         </header>
-        <div className="cockpit-grid cockpit-grid--dashboard">
-          <OnboardingPanel />
-          <article className="cockpit-panel">
-            <p className="cockpit-panel__label">Protection</p>
-            <dl className="cockpit-definition-list">
-              <div><dt>Owner</dt><dd>{state.email ?? state.userId}</dd></div>
-              <div><dt>Access mode</dt><dd>{state.accessMode}</dd></div>
-              <div><dt>Unlock expires</dt><dd>{state.unlockedUntil}</dd></div>
-            </dl>
-          </article>
-          <article className="cockpit-panel">
-            <p className="cockpit-panel__label">Learning State</p>
-            <h3>{dashboard.topic.currentTopicSlug ?? 'No active topic yet'}</h3>
-            <dl className="cockpit-definition-list">
-              <div><dt>Topic status</dt><dd>{dashboard.topic.topicStatus ?? 'not ready'}</dd></div>
-              <div><dt>Current session</dt><dd>{dashboard.topic.currentSession?.title ?? dashboard.topic.currentSessionId ?? 'none'}</dd></div>
-              <div><dt>Progress</dt><dd>{dashboard.topic.completedSessionCount} / {dashboard.topic.totalSessionCount}</dd></div>
-              <div><dt>Cache</dt><dd>{dashboard.cache.status}</dd></div>
-            </dl>
-            <div className="cockpit-chip-row">
-              <a className="workspace-button" href="/lesson/current">Current lesson</a>
-              <a className="workspace-button workspace-button--secondary" href="/lesson/review">Lesson review</a>
+
+        <div className="dashboard-layout">
+          <article
+            className={`cockpit-panel cockpit-panel--primary dashboard-action dashboard-action--${viewModel.mode}`}
+            aria-labelledby="dashboard-primary-title"
+          >
+            <div>
+              <p className="cockpit-panel__label">
+                {hasLearningPath ? 'Up next' : 'First step'}
+              </p>
+              <h2 id="dashboard-primary-title">{viewModel.primaryTitle}</h2>
+              <p>{viewModel.primaryDescription}</p>
+              <div className="cockpit-chip-row">
+                <Link
+                  className="workspace-button dashboard-continue"
+                  href={viewModel.primaryActionHref}
+                >
+                  {viewModel.primaryActionLabel}
+                </Link>
+                <Link
+                  className="dashboard-inline-link"
+                  href={viewModel.secondaryActionHref}
+                >
+                  {viewModel.secondaryActionLabel}
+                </Link>
+              </div>
+            </div>
+            <div
+              className="dashboard-progress"
+              aria-label={`${viewModel.progressPercent}% of planned sessions complete`}
+            >
+              <span>{viewModel.progressPercent}%</span>
+              <small>complete</small>
             </div>
           </article>
-          <article className="cockpit-panel">
-            <p className="cockpit-panel__label">Workflow</p>
-            <h3>{dashboard.latestWorkflow?.jobType ?? 'No workflow runs yet'}</h3>
-            <dl className="cockpit-definition-list">
-              <div><dt>Status</dt><dd>{dashboard.latestWorkflow?.status ?? 'idle'}</dd></div>
-              <div><dt>Alerts</dt><dd>{dashboard.alerts.length} recent delivery rows</dd></div>
-              <div><dt>Revision</dt><dd>{dashboard.topic.curriculumRevision ?? 'none'}</dd></div>
-            </dl>
-          </article>
+
+          <div
+            className="dashboard-secondary-grid"
+            aria-label="Learning status"
+          >
+            <article className="cockpit-panel progress-card">
+              <p className="cockpit-panel__label">Current path</p>
+              <h2>{viewModel.topicLabel}</h2>
+              <div className="progress-track" aria-hidden="true">
+                <span style={{ width: `${viewModel.progressPercent}%` }} />
+              </div>
+              <p className="dashboard-metric">{viewModel.progressText}</p>
+              <Link className="workspace-link" href="/curriculum">
+                See the path
+              </Link>
+            </article>
+
+            <article className="cockpit-panel activity-card">
+              <p className="cockpit-panel__label">LRNR activity</p>
+              <h2>{viewModel.activityTitle}</h2>
+              <p>{viewModel.activityDescription}</p>
+              <p className="dashboard-metric">{viewModel.alertSummary}</p>
+            </article>
+          </div>
+
+          <div
+            className="dashboard-secondary-grid"
+            aria-label="Review and trust"
+          >
+            <article className="cockpit-panel trust-card">
+              <p className="cockpit-panel__label">Review</p>
+              <h2>Keep the ideas warm.</h2>
+              <p>
+                Review opens the current lesson questions without pretending to
+                save answers until the API supports persistence.
+              </p>
+              <Link className="workspace-link" href="/lesson/review">
+                Open guided review
+              </Link>
+            </article>
+
+            <article className="cockpit-panel trust-card">
+              <p className="cockpit-panel__label">Sources</p>
+              <h2>Trust stays attached to lessons.</h2>
+              <p>
+                Source details appear when the persisted lesson payload includes
+                them. LRNR will not invent confidence or citation quality here.
+              </p>
+              <Link className="workspace-link" href="/lesson/current">
+                Inspect lesson sources
+              </Link>
+            </article>
+          </div>
+
+          {hasLearningPath ? null : (
+            <section
+              className="dashboard-onboarding"
+              id="build-learning-path"
+              aria-labelledby="build-learning-path-title"
+            >
+              <div className="section-heading">
+                <p className="cockpit-kicker">Learning path builder</p>
+                <h2 id="build-learning-path-title">
+                  Help LRNR understand your starting point.
+                </h2>
+              </div>
+              <OnboardingPanel />
+            </section>
+          )}
         </div>
       </section>
     </AppShell>

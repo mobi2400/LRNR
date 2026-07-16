@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 
+import { AuthError } from 'next-auth';
 import { redirect } from 'next/navigation';
 
 import { loginRequestSchema } from '@/schemas/auth.schema';
@@ -43,8 +44,12 @@ async function loginAction(formData: FormData): Promise<void> {
       identifier: parsedInput.data.identifier,
       redirectTo: '/unlock',
     });
-  } catch {
-    redirect('/login?error=invalid-owner');
+  } catch (error) {
+    if (error instanceof AuthError) {
+      redirect('/login?error=invalid-owner');
+    }
+
+    throw error;
   }
 }
 

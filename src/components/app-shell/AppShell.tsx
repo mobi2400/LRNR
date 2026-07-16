@@ -20,17 +20,43 @@ const navigationItems: Array<{
   href: string;
   label: string;
   route: AppShellRoute;
+  shortLabel: string;
 }> = [
-  { href: '/dashboard', label: 'Dashboard', route: 'dashboard' },
-  { href: '/lesson/current', label: 'Current Lesson', route: 'lesson-current' },
-  { href: '/lesson/review', label: 'Lesson Review', route: 'lesson-review' },
-  { href: '/curriculum', label: 'Curriculum', route: 'curriculum' },
-  { href: '/settings', label: 'Settings', route: 'settings' },
+  {
+    href: '/dashboard',
+    label: 'Today',
+    route: 'dashboard',
+    shortLabel: 'Today',
+  },
+  {
+    href: '/lesson/current',
+    label: 'Lesson',
+    route: 'lesson-current',
+    shortLabel: 'Lesson',
+  },
+  {
+    href: '/lesson/review',
+    label: 'Review',
+    route: 'lesson-review',
+    shortLabel: 'Review',
+  },
+  {
+    href: '/curriculum',
+    label: 'Path',
+    route: 'curriculum',
+    shortLabel: 'Path',
+  },
+  {
+    href: '/settings',
+    label: 'Settings',
+    route: 'settings',
+    shortLabel: 'Settings',
+  },
 ];
 
 /**
- * The app shell keeps protected learning pages visually consistent while the
- * richer Phase 1 backend routes are still being implemented.
+ * Shared protected shell for LRNR's learner-facing cockpit surfaces.
+ * It owns navigation and landmarks only; page components own learning data.
  */
 export function AppShell({
   activeRoute,
@@ -40,38 +66,59 @@ export function AppShell({
 }: AppShellProps): JSX.Element {
   return (
     <div className="cockpit-shell">
-      <aside className="cockpit-sidebar">
-        <div className="cockpit-brand">
+      <a className="skip-link" href="#main-content">
+        Skip to learning content
+      </a>
+      <aside className="cockpit-sidebar" aria-label="LRNR workspace">
+        <div className="cockpit-brand" aria-label="LRNR learning cockpit">
           <p className="cockpit-kicker">LRNR</p>
-          <h1>Private learning cockpit</h1>
+          <strong>Learning cockpit</strong>
           <p>
-            One protected workspace for deliberate study, review, and progress
-            tracking.
+            Your private study surface for today, review, and the path ahead.
           </p>
         </div>
-        <nav className="cockpit-nav" aria-label="Primary">
-          {navigationItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={
-                item.route === activeRoute
-                  ? 'cockpit-nav__item cockpit-nav__item--active'
-                  : 'cockpit-nav__item'
-              }
-            >
-              {item.label}
-            </Link>
-          ))}
+        <nav className="cockpit-nav" aria-label="Primary navigation">
+          {navigationItems.map((item, index) => {
+            const isActive = item.route === activeRoute;
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={isActive ? 'page' : undefined}
+                className={
+                  isActive
+                    ? 'cockpit-nav__item cockpit-nav__item--active'
+                    : 'cockpit-nav__item'
+                }
+              >
+                <span className="cockpit-nav__index" aria-hidden="true">
+                  {index + 1}
+                </span>
+                <span>{item.shortLabel}</span>
+              </Link>
+            );
+          })}
         </nav>
-        <div className="cockpit-sidebar__meta">
-          <span>Owner</span>
-          <strong>{identity}</strong>
-          <span>Unlock window</span>
-          <strong>{unlockExpiresAt ?? 'Active session'}</strong>
+        <div
+          className="cockpit-sidebar__meta"
+          aria-label="Private workspace status"
+        >
+          <span className="cockpit-sidebar__meta-label">Owner</span>
+          <strong className="cockpit-identity" title={identity}>
+            {identity}
+          </strong>
+          <span className="cockpit-private-status">
+            Private workspace active
+          </span>
+          {unlockExpiresAt === null ? null : (
+            <span className="sr-only">Unlock expires at {unlockExpiresAt}</span>
+          )}
         </div>
       </aside>
-      <div className="cockpit-main">{children}</div>
+      <main className="cockpit-main" id="main-content" tabIndex={-1}>
+        {children}
+      </main>
     </div>
   );
 }

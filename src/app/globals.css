@@ -110,6 +110,24 @@ button:disabled,
   opacity: 0.58;
 }
 
+.skip-link {
+  position: fixed;
+  top: var(--lrnr-space-3);
+  left: var(--lrnr-space-3);
+  z-index: 20;
+  border-radius: var(--lrnr-radius-control);
+  background: var(--lrnr-primary);
+  color: #ffffff;
+  font-weight: 750;
+  padding: var(--lrnr-space-3) var(--lrnr-space-4);
+  transform: translateY(-140%);
+  transition: transform var(--lrnr-transition);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -375,6 +393,13 @@ button:disabled,
   padding: 0 10px;
 }
 
+.cockpit-brand strong {
+  display: block;
+  color: var(--lrnr-text-primary);
+  font-size: 1rem;
+  line-height: 1.15;
+}
+
 .cockpit-brand h1 {
   font-size: 1rem;
 }
@@ -426,6 +451,25 @@ button:disabled,
   content: '';
 }
 
+.cockpit-nav__index {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--lrnr-border-soft);
+  border-radius: 999px;
+  color: var(--lrnr-text-tertiary);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.cockpit-nav__item--active .cockpit-nav__index {
+  border-color: color-mix(in srgb, var(--lrnr-primary) 24%, transparent);
+  background: var(--lrnr-primary-soft);
+  color: var(--lrnr-primary-hover);
+}
+
 .cockpit-sidebar__meta {
   display: grid;
   gap: var(--lrnr-space-1);
@@ -436,12 +480,40 @@ button:disabled,
   padding-top: var(--lrnr-space-4);
 }
 
+.cockpit-sidebar__meta-label {
+  font-weight: 750;
+}
+
 .cockpit-sidebar__meta strong {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
   color: var(--lrnr-text-primary);
   font-size: 0.82rem;
   font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cockpit-private-status {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: var(--lrnr-space-2);
+  border: 1px solid var(--lrnr-border-soft);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.52);
+  color: var(--lrnr-text-secondary);
+  font-weight: 700;
+  margin-top: var(--lrnr-space-2);
+  padding: 0.28rem 0.55rem;
+}
+
+.cockpit-private-status::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--lrnr-success);
+  content: '';
 }
 
 .cockpit-main {

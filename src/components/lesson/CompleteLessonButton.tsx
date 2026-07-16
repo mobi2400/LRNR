@@ -53,7 +53,7 @@ export function CompleteLessonButton({
         setMessage(
           json.data.nextSessionId === null
             ? 'Lesson completed. This topic has no next planned session yet.'
-            : 'Lesson completed. The next session pointer is ready.',
+            : 'Lesson completed. The next session is ready in your path.',
         );
       })();
     });
@@ -66,16 +66,20 @@ export function CompleteLessonButton({
         type="button"
         onClick={completeLesson}
         disabled={isPending}
+        aria-busy={isPending}
       >
-        {isPending ? 'Completing...' : 'Mark complete'}
+        {isPending ? 'Completing lesson...' : 'Mark lesson complete'}
       </button>
-      {message === null ? null : (
-        <p className="cockpit-feedback cockpit-feedback--success">{message}</p>
-      )}
-      {error === null ? null : (
-        <p className="cockpit-feedback cockpit-feedback--error">{error}</p>
-      )}
+      <div aria-live="polite">
+        {message === null ? null : (
+          <p className="cockpit-feedback cockpit-feedback--success">
+            {message}
+          </p>
+        )}
+        {error === null ? null : (
+          <p className="cockpit-feedback cockpit-feedback--error">{error}</p>
+        )}
+      </div>
     </div>
   );
 }
-

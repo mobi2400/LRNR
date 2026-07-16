@@ -59,6 +59,7 @@ export default async function LoginPage({
   const message = readMessage(
     Array.isArray(errorValue) ? errorValue[0] : errorValue,
   );
+  const hasMessage = message !== null;
 
   if (state.isAuthenticated && state.isOwner && state.isUnlocked) {
     redirect('/dashboard');
@@ -70,36 +71,47 @@ export default async function LoginPage({
 
   return (
     <main className="auth-shell">
-      <section className="auth-card">
-        <p className="auth-eyebrow">LRNR Private Access</p>
-        <h1>Enter the owner identity for this learning cockpit.</h1>
+      <section className="auth-card" aria-labelledby="login-title">
+        <p className="auth-eyebrow">Gate 1 of 2</p>
+        <h1 id="login-title">Confirm the owner identity.</h1>
         <p className="auth-copy">
-          Gate one confirms the signed-in owner account before LRNR asks for the
-          private unlock secret.
+          LRNR is private. First confirm the configured owner account, then use
+          the separate private unlock secret to open the learning cockpit.
         </p>
-        {message ? <p className="auth-alert">{message}</p> : null}
-        <form action={loginAction} className="auth-form">
-          <label className="auth-field">
+        {hasMessage ? (
+          <p className="auth-alert" id="login-feedback" role="alert">
+            {message}
+          </p>
+        ) : null}
+        <form
+          action={loginAction}
+          aria-describedby={
+            hasMessage ? 'login-feedback login-help' : 'login-help'
+          }
+          className="auth-form"
+        >
+          <label className="auth-field" htmlFor="owner-identifier">
             <span>Owner email or user ID</span>
-            <input
-              autoComplete="username"
-              className="auth-input"
-              name="identifier"
-              placeholder="owner@example.com"
-              type="text"
-            />
+            <small id="login-help">
+              Use the identity configured for this private LRNR deployment.
+            </small>
           </label>
+          <input
+            autoComplete="username"
+            className="auth-input"
+            id="owner-identifier"
+            name="identifier"
+            placeholder="owner@example.com"
+            type="text"
+          />
           <button className="auth-button" type="submit">
-            Continue to unlock
+            Continue to private unlock
           </button>
         </form>
         <p className="auth-footnote">
-          Auth.js handles the session, but LRNR stays locked until the second
-          private secret is verified.
+          Identity verification alone never exposes lessons, provider keys, or
+          private learning context.
         </p>
-        <a className="auth-link" href="https://authjs.dev">
-          Auth.js reference
-        </a>
       </section>
     </main>
   );

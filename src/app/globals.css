@@ -241,6 +241,51 @@ button:disabled,
   gap: var(--lrnr-space-4);
 }
 
+.auth-field small {
+  color: var(--lrnr-text-secondary);
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.state-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  background: var(--lrnr-canvas);
+  padding: var(--lrnr-space-6);
+}
+
+.state-card {
+  display: grid;
+  gap: var(--lrnr-space-4);
+}
+
+.state-card h1 {
+  margin: 0;
+  color: var(--lrnr-text-primary);
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  line-height: 1.1;
+}
+
+.technical-details {
+  border: 1px solid var(--lrnr-border-soft);
+  border-radius: var(--lrnr-radius-control);
+  background: var(--lrnr-surface-muted);
+  padding: var(--lrnr-space-3) var(--lrnr-space-4);
+}
+
+.technical-details summary {
+  cursor: pointer;
+  color: var(--lrnr-text-secondary);
+  font-weight: 800;
+}
+
+.technical-details pre {
+  overflow-x: auto;
+  color: var(--lrnr-danger);
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  white-space: pre-wrap;
+}
 .auth-form {
   margin-top: var(--lrnr-space-6);
 }

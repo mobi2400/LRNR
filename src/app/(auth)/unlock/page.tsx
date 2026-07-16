@@ -78,6 +78,7 @@ export default async function UnlockPage({
   const message = readMessage(
     Array.isArray(errorValue) ? errorValue[0] : errorValue,
   );
+  const hasMessage = message !== null;
 
   if (!state.isAuthenticated) {
     redirect('/login');
@@ -93,28 +94,44 @@ export default async function UnlockPage({
 
   return (
     <main className="auth-shell">
-      <section className="auth-card auth-card--compact">
-        <p className="auth-eyebrow">LRNR Unlock</p>
-        <h1>Use the private LRNR secret to open the workspace.</h1>
+      <section
+        className="auth-card auth-card--compact"
+        aria-labelledby="unlock-title"
+      >
+        <p className="auth-eyebrow">Gate 2 of 2</p>
+        <h1 id="unlock-title">Unlock the private learning cockpit.</h1>
         <p className="auth-copy">
-          Gate two protects the learning cockpit even if the wrong provider
-          session reaches the login screen.
+          This second gate protects LRNR even after the owner identity is
+          confirmed. The secret is verified server-side and never displayed.
         </p>
-        <div className="auth-meta">
-          <span>Signed in as {state.email ?? state.userId}</span>
-        </div>
-        {message ? <p className="auth-alert">{message}</p> : null}
-        <form action={unlockAction} className="auth-form">
-          <label className="auth-field">
+        <p className="auth-meta">Signed in as {state.email ?? state.userId}</p>
+        {hasMessage ? (
+          <p className="auth-alert" id="unlock-feedback" role="alert">
+            {message}
+          </p>
+        ) : null}
+        <form
+          action={unlockAction}
+          aria-describedby={
+            hasMessage ? 'unlock-feedback unlock-help' : 'unlock-help'
+          }
+          className="auth-form"
+        >
+          <label className="auth-field" htmlFor="accessSecret">
             <span>Private LRNR access secret</span>
-            <input
-              autoComplete="current-password"
-              className="auth-input"
-              name="accessSecret"
-              placeholder="Enter your private LRNR secret"
-              type="password"
-            />
+            <small id="unlock-help">
+              Use the deployment secret. It is never logged or shown back to
+              you.
+            </small>
           </label>
+          <input
+            autoComplete="current-password"
+            className="auth-input"
+            id="accessSecret"
+            name="accessSecret"
+            placeholder="Enter your private LRNR secret"
+            type="password"
+          />
           <button className="auth-button" type="submit">
             Unlock LRNR
           </button>
@@ -124,9 +141,6 @@ export default async function UnlockPage({
             Sign out and switch identity
           </button>
         </form>
-        <a className="auth-link" href="/api/me">
-          Inspect current auth summary
-        </a>
       </section>
     </main>
   );

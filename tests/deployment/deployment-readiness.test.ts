@@ -13,6 +13,15 @@ describe('deployment readiness gate', () => {
     expect(report.configured).toContain('APP_URL');
   });
 
+  it('fails when the daily worker or scheduler artifacts are absent', () => {
+    const report = buildDeploymentReadinessReport(
+      {},
+      (path) => path !== 'scripts/run-daily-learning.ts',
+    );
+
+    expect(report.ready).toBe(false);
+    expect(report.missingArtifacts).toContain('scripts/run-daily-learning.ts');
+  });
   it('does not expose configured secret values', () => {
     const report = buildDeploymentReadinessReport({
       APP_URL: 'https://lrnr.test',

@@ -18,6 +18,8 @@
     "eval:phase1": "vitest run tests/evals/phase1-eval.test.ts",
     "smoke:phase1": "tsx scripts/smoke-test-phase-1.ts",
     "deploy:check": "tsx scripts/deployment-readiness-check.ts",
+    "daily:run": "tsx scripts/run-daily-learning.ts",
+    "outbox:process": "tsx scripts/process-delivery-outbox.ts",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:status": "tsx scripts/db-status.ts"

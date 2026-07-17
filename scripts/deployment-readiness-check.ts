@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+
 import { pathToFileURL } from 'node:url';
 
 export const requiredDeploymentEnvKeys = [
@@ -18,14 +20,23 @@ export const requiredDeploymentEnvKeys = [
   'TELEGRAM_OWNER_CHAT_ID',
 ] as const;
 
+export const requiredRuntimeArtifacts = [
+  'scripts/run-daily-learning.ts',
+  'scripts/process-delivery-outbox.ts',
+  '.github/workflows/daily-learning.yml',
+  '.github/workflows/delivery-outbox.yml',
+] as const;
+
 export interface DeploymentReadinessReport {
   ready: boolean;
   configured: string[];
   missing: string[];
+  missingArtifacts: string[];
 }
 
 export function buildDeploymentReadinessReport(
   env: Record<string, string | undefined>,
+  artifactExists: (path: string) => boolean = existsSync,
 ): DeploymentReadinessReport {
   const configured: string[] = [];
   const missing: string[] = [];
@@ -40,10 +51,15 @@ export function buildDeploymentReadinessReport(
     }
   }
 
+  const missingArtifacts = requiredRuntimeArtifacts.filter(
+    (artifact) => !artifactExists(artifact),
+  );
+
   return {
-    ready: missing.length === 0,
+    ready: missing.length === 0 && missingArtifacts.length === 0,
     configured,
     missing,
+    missingArtifacts: [...missingArtifacts],
   };
 }
 

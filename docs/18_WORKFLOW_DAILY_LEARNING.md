@@ -303,3 +303,9 @@ Priority tests:
 - Must NOT lose interactive conversation state.
 - Must NOT mark a lesson ready before lesson persistence succeeds.
 - Must NOT treat Telegram as the primary lesson surface.
+
+## Phase 1 runtime implementation
+
+The private-owner runtime entrypoint is `pnpm daily:run`. It acquires the existing Redis workflow lock, evaluates persisted profile and curriculum state, and generates only the current planned session. A ready lesson produces a no-op; missing onboarding waits safely; an evaluation due after at least two completed lessons pauses teaching rather than skipping the evaluation.
+
+Generation persists the lesson before independently idempotent RAG and Telegram-outbox side effects. `pnpm outbox:process` drains at most 20 pending Telegram deliveries per invocation. GitHub Actions schedules daily learning at `01:30 UTC` (`07:00 IST`) and processes the delivery outbox every five minutes. PostgreSQL remains authoritative; Redis only coordinates the daily lock.

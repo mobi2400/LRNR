@@ -1,0 +1,45 @@
+name: LRNR daily learning
+
+on:
+  schedule:
+    # GitHub cron is UTC. 01:30 UTC is 07:00 IST.
+    - cron: '30 1 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: lrnr-daily-learning
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      APP_URL: ${{ secrets.APP_URL }}
+      ACCESS_MODE: owner_only
+      OWNER_USER_ID: ${{ secrets.OWNER_USER_ID }}
+      OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
+      AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+      LRNR_ACCESS_SECRET_HASH: ${{ secrets.LRNR_ACCESS_SECRET_HASH }}
+      LRNR_ACCESS_SECRET_SALT: ${{ secrets.LRNR_ACCESS_SECRET_SALT }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      REDIS_URL: ${{ secrets.REDIS_URL }}
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+      EMBEDDING_API_KEY: ${{ secrets.EMBEDDING_API_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_OWNER_CHAT_ID: ${{ secrets.TELEGRAM_OWNER_CHAT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm daily:run
+      - run: pnpm outbox:process

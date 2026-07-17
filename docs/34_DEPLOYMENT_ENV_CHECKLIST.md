@@ -407,3 +407,7 @@ Owner can log in, unlock, submit a goal, complete onboarding, generate curriculu
 ```
 
 If that sentence is false, deployment is not ready.
+
+## Scheduled runtime deployment
+
+Configure the repository Actions secrets used by `.github/workflows/daily-learning.yml` and `.github/workflows/delivery-outbox.yml`, including `OWNER_USER_ID`. Verify `REDIS_URL` is a valid reachable Redis URL because the daily runner fails safely when it cannot acquire its fenced lock. Run `pnpm deploy:check`, then manually dispatch both workflows once before relying on their schedules.

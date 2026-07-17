@@ -12,25 +12,30 @@ function parseMermaidFlow(content: string): string[] | null {
   const labels = new Map<string, string>();
   const order: string[] = [];
 
+  function parseNode(token: string): { id: string; label?: string } | null {
+    const node = token
+      .trim()
+      .match(
+        /^([A-Za-z0-9_]+)(?:\[\(?([^\]\)]+)\)?\]|\(([^)]+)\)|\{([^}]+)\})?$/,
+      );
+
+    if (node === null || node[1] === undefined) return null;
+
+    const label = node[2] ?? node[3] ?? node[4];
+    return label === undefined ? { id: node[1] } : { id: node[1], label };
+  }
+
   for (const line of lines) {
-    const edge = line.match(
-      /^([A-Za-z0-9_]+)(?:\[([^\]]+)\])?\s*--?>\s*([A-Za-z0-9_]+)(?:\[([^\]]+)\])?$/,
-    );
+    const edge = line.match(/^(.+?)\s*--?>\s*(.+)$/);
+    const from = edge?.[1] === undefined ? null : parseNode(edge[1]);
+    const to = edge?.[2] === undefined ? null : parseNode(edge[2]);
 
-    if (edge === null) {
-      return null;
-    }
+    if (from === null || to === null) return null;
 
-    const [, fromId, fromLabel, toId, toLabel] = edge;
-
-    if (fromId === undefined || toId === undefined) {
-      return null;
-    }
-
-    if (fromLabel !== undefined) labels.set(fromId, fromLabel);
-    if (toLabel !== undefined) labels.set(toId, toLabel);
-    if (!order.includes(fromId)) order.push(fromId);
-    if (!order.includes(toId)) order.push(toId);
+    if (from.label !== undefined) labels.set(from.id, from.label);
+    if (to.label !== undefined) labels.set(to.id, to.label);
+    if (!order.includes(from.id)) order.push(from.id);
+    if (!order.includes(to.id)) order.push(to.id);
   }
 
   const resolved = order
@@ -62,7 +67,7 @@ export function LessonDiagram({ diagram }: { diagram: Diagram }): JSX.Element {
           <span className="lesson-diagram-node">{node}</span>
           {index === nodes.length - 1 ? null : (
             <span className="lesson-diagram-arrow" aria-hidden="true">
-              →
+              &rarr;
             </span>
           )}
         </li>

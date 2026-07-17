@@ -33,7 +33,7 @@ describe('Gemini structured generation wrapper', () => {
     expect(result).toEqual({ title: 'Grounded lesson' });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const [url, request] = fetchImpl.mock.calls[0] as [string, RequestInit];
-    expect(url).toContain('/models/gemini-2.5-flash:generateContent');
+    expect(url).toContain('/models/gemini-3.5-flash:generateContent');
     expect(request.headers).toEqual(
       expect.objectContaining({ 'x-goog-api-key': expect.any(String) }),
     );

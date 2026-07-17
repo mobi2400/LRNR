@@ -11,13 +11,14 @@ describe('LessonDiagram', () => {
         diagram: {
           type: 'mermaid',
           content:
-            'flowchart LR\n  A[Client] --> B[Load balancer]\n  B --> C[Service]',
+            'flowchart LR\n  A[Client] --> B[Load balancer]\n  B --> C[(Database)]',
         },
       }),
     );
 
     expect(html).toContain('Lesson concept flow');
     expect(html).toContain('Load balancer');
+    expect(html).toContain('Database');
     expect(html).not.toContain('flowchart LR');
   });
 

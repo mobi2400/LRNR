@@ -8,7 +8,7 @@ assertServerOnly('src/lib/llm.ts');
 
 const GEMINI_GENERATE_CONTENT_BASE_URL =
   'https://generativelanguage.googleapis.com/v1beta/models';
-const DEFAULT_REASONING_MODEL = 'gemini-2.5-flash';
+const DEFAULT_REASONING_MODEL = 'gemini-3.5-flash';
 const DEFAULT_TIMEOUT_MS = 45_000;
 
 export interface StructuredExtractionInput<TOutput> {

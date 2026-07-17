@@ -1,6 +1,80 @@
-import type { CurriculumSession } from '@/schemas/curriculum.schema';
 import type { TopicKnowledgeBaseRecord } from '@/db/knowledge.repo';
-import { lessonPayloadSchema, type LessonPayload } from '@/schemas/lesson.schema';
+import type { ProfileRecord } from '@/db/profile.repo';
+import { generateStructured } from '@/lib/llm';
+import {
+  buildGroundedLessonPrompt,
+  teachingSystemPrompt,
+} from '@/prompts/teaching.prompts';
+import type { CurriculumSession } from '@/schemas/curriculum.schema';
+import {
+  lessonPayloadSchema,
+  type LessonPayload,
+} from '@/schemas/lesson.schema';
+
+const generatedLessonContentSchema = lessonPayloadSchema
+  .omit({ sessionId: true, topicSlug: true, generatedBy: true })
+  .superRefine((lesson, context) => {
+    if (lesson.explanation.length < 3) {
+      context.addIssue({
+        code: 'custom',
+        path: ['explanation'],
+        message: 'A generated lesson needs at least three teaching sections.',
+      });
+    }
+
+    if (lesson.commonMistakes.length < 2) {
+      context.addIssue({
+        code: 'custom',
+        path: ['commonMistakes'],
+        message: 'A generated lesson needs at least two concrete mistakes.',
+      });
+    }
+
+    if (lesson.reviewQuestions.length < 2) {
+      context.addIssue({
+        code: 'custom',
+        path: ['reviewQuestions'],
+        message: 'A generated lesson needs at least two reasoning questions.',
+      });
+    }
+
+    const exposedPlan = lesson.explanation.some((section) =>
+      /^(define|explain|establish|close with|plan step)\b/i.test(section.body),
+    );
+
+    if (exposedPlan) {
+      context.addIssue({
+        code: 'custom',
+        path: ['explanation'],
+        message:
+          'Lesson prose must not expose curriculum planning instructions.',
+      });
+    }
+
+    if (
+      lesson.codeExamples.some((example) =>
+        example.code.includes('type LearningCheckpoint'),
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['codeExamples'],
+        message:
+          'Generic LearningCheckpoint scaffold code is not lesson content.',
+      });
+    }
+  });
+
+type GeneratedLessonContent = typeof generatedLessonContentSchema._output;
+
+type LessonContentGenerator = (input: {
+  label: string;
+  system: string;
+  prompt: string;
+  schema: typeof generatedLessonContentSchema;
+  temperature: number;
+  maxTokens: number;
+}) => Promise<GeneratedLessonContent>;
 
 function readString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0
@@ -8,13 +82,14 @@ function readString(value: unknown): string | null {
     : null;
 }
 
+function sourceKind(url: string): 'internal' | 'external' {
+  return url.startsWith('lrnr://') ? 'internal' : 'external';
+}
+
 function readSourceRefs(
   knowledgeBase: TopicKnowledgeBaseRecord,
   session: CurriculumSession,
-): Array<{
-  label: string;
-  url: string;
-}> {
+): LessonPayload['sourceReferences'] {
   const inventorySources = knowledgeBase.sourceInventory
     .map((item) => {
       if (item === null || typeof item !== 'object' || Array.isArray(item)) {
@@ -25,9 +100,11 @@ function readSourceRefs(
       const label = readString(record.name) ?? readString(record.label);
       const url = readString(record.url);
 
-      return label !== null && url !== null ? { label, url } : null;
+      return label !== null && url !== null
+        ? { label, url, kind: sourceKind(url) }
+        : null;
     })
-    .filter((source): source is { label: string; url: string } => source !== null);
+    .filter((source) => source !== null);
 
   if (inventorySources.length > 0) {
     return inventorySources.slice(0, 4);
@@ -36,6 +113,7 @@ function readSourceRefs(
   return session.sourceRefs.slice(0, 4).map((url, index) => ({
     label: `Session source ${index + 1}`,
     url,
+    kind: sourceKind(url),
   }));
 }
 
@@ -87,6 +165,65 @@ function buildReviewQuestions(session: CurriculumSession) {
   }));
 }
 
+/**
+ * Generates a provider-backed lesson and rejects planning scaffolds before they
+ * can be persisted. Returned citations are constrained to Cartographer's
+ * validated source inventory.
+ */
+export async function generateGroundedLessonPayload(
+  input: {
+    topicSlug: string;
+    session: CurriculumSession;
+    knowledgeBase: TopicKnowledgeBaseRecord;
+    profile: ProfileRecord;
+  },
+  generate: LessonContentGenerator = generateStructured,
+): Promise<LessonPayload> {
+  const generated = await generate({
+    label: 'teaching_grounded_lesson',
+    system: teachingSystemPrompt,
+    prompt: buildGroundedLessonPrompt(input),
+    schema: generatedLessonContentSchema,
+    temperature: 0.3,
+    maxTokens: 4_500,
+  });
+  const allowedSources = readSourceRefs(input.knowledgeBase, input.session);
+  const allowedByUrl = new Map(
+    allowedSources.map((source) => [source.url, source]),
+  );
+  const citedSources = generated.sourceReferences
+    .map((source) => allowedByUrl.get(source.url) ?? null)
+    .filter((source) => source !== null);
+  const externalEvidenceAvailable = allowedSources.some(
+    (source) => source.kind === 'external',
+  );
+  const externalEvidenceCited = citedSources.some(
+    (source) => source.kind === 'external',
+  );
+
+  if (citedSources.length === 0) {
+    throw new Error('Teaching Agent did not cite a validated source.');
+  }
+
+  if (externalEvidenceAvailable && !externalEvidenceCited) {
+    throw new Error(
+      'Teaching Agent ignored the available external research evidence.',
+    );
+  }
+
+  return lessonPayloadSchema.parse({
+    ...generated,
+    sessionId: input.session.id,
+    topicSlug: input.topicSlug,
+    sourceReferences: citedSources,
+    generatedBy: 'teaching_node',
+  });
+}
+
+/**
+ * Legacy deterministic builder retained for pure fixtures and historical
+ * payload compatibility. Production preparation uses the grounded generator.
+ */
 export function createLessonPayload(input: {
   topicSlug: string;
   session: CurriculumSession;

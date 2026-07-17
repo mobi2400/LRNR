@@ -871,3 +871,11 @@ MOCK_LLM=false pnpm run dev:learning
 - Must NOT re-send a session that is already marked as `delivered`.
 - Must NOT surface Layer 3 items that have expired past their `expiresAt` timestamp.
 - Must NOT skip the RAG write at the end. Future sessions depend on this context.
+
+## Phase 1 lesson quality implementation
+
+The production Teaching Agent generates a Zod-validated lesson through the approved LLM wrapper. It receives only the learner profile fields, current curriculum session, and Cartographer knowledge document required for that lesson. Generation fails instead of persisting curriculum planning instructions or the historical generic `LearningCheckpoint` scaffold.
+
+Persisted source references are constrained to Cartographer's validated source inventory and identify internal LRNR context separately from external sources. The lesson page renders supported Mermaid flowcharts as accessible concept nodes; unsupported diagram syntax falls back to readable text rather than appearing as raw diagram code.
+
+Initial System Design research includes bounded first-party sources from AWS, Google SRE, and Cloudflare. Provider calls retain timeout, retry, safe error handling, and runtime output validation in the shared LLM wrapper.

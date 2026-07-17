@@ -15,9 +15,12 @@ import { appLogger } from '@/lib/logger';
 import { type DbActor, requireRow } from '@/db/repository-helpers';
 import {
   createCompactSessionSummary,
-  createLessonPayload,
+  generateGroundedLessonPayload,
 } from '@/agents/teaching/teaching-agent';
-import { curriculumSessionSchema, type CurriculumSession } from '@/schemas/curriculum.schema';
+import {
+  curriculumSessionSchema,
+  type CurriculumSession,
+} from '@/schemas/curriculum.schema';
 import {
   currentLessonResponseSchema,
   followUpResponseSchema,
@@ -35,13 +38,25 @@ import {
   getCachedJson,
   setCachedJson,
 } from '@/server/cache';
-import { assertIdempotencyReplay, type AnyApiEnvelope } from '@/server/idempotency';
+import {
+  assertIdempotencyReplay,
+  type AnyApiEnvelope,
+} from '@/server/idempotency';
 
 const IDEMPOTENCY_TTL_MS = 1000 * 60 * 60 * 24;
 const lessonCacheStore = new RedisKeyValueStore();
 
-export function buildLessonGenerationKey(input: { userId: string; sessionId: string; curriculumRevision: number }): string {
-  return ['lesson-generate', input.userId, input.sessionId, String(input.curriculumRevision)].join(':');
+export function buildLessonGenerationKey(input: {
+  userId: string;
+  sessionId: string;
+  curriculumRevision: number;
+}): string {
+  return [
+    'lesson-generate',
+    input.userId,
+    input.sessionId,
+    String(input.curriculumRevision),
+  ].join(':');
 }
 
 function getCurrentSession(
@@ -56,7 +71,9 @@ function getCurrentSession(
     curriculumSessionSchema.parse(session),
   );
 
-  return parsedSessions.find((session) => session.id === currentSessionId) ?? null;
+  return (
+    parsedSessions.find((session) => session.id === currentSessionId) ?? null
+  );
 }
 
 async function loadCurrentCurriculum(actor: DbActor) {
@@ -101,7 +118,11 @@ export async function generateAndPersistCurrentLesson(
 ): Promise<LessonPayload> {
   const { profile, curriculum } = await loadCurrentCurriculum(actor);
 
-  if (profile === null || profile.currentTopicSlug === null || curriculum === null) {
+  if (
+    profile === null ||
+    profile.currentTopicSlug === null ||
+    curriculum === null
+  ) {
     throw new AppError({
       code: 'NOT_FOUND',
       message: 'No active topic is ready for lesson generation.',
@@ -124,10 +145,11 @@ export async function generateAndPersistCurrentLesson(
     'Topic knowledge base not found for lesson generation.',
     { topicSlug },
   );
-  const lesson = createLessonPayload({
+  const lesson = await generateGroundedLessonPayload({
     topicSlug,
     session: currentSession,
     knowledgeBase,
+    profile,
   });
 
   try {
@@ -139,9 +161,13 @@ export async function generateAndPersistCurrentLesson(
   } catch (error) {
     if (error instanceof AppError && error.code === 'CONFLICT') {
       const replay = await loadCurrentCurriculum(actor);
-      const replaySession = replay.curriculum === null
-        ? null
-        : getCurrentSession(replay.curriculum.layer2Sessions, currentSession.id);
+      const replaySession =
+        replay.curriculum === null
+          ? null
+          : getCurrentSession(
+              replay.curriculum.layer2Sessions,
+              currentSession.id,
+            );
 
       if (replaySession?.lesson !== undefined) {
         return lessonPayloadSchema.parse(replaySession.lesson);
@@ -200,7 +226,9 @@ export async function getCurrentLesson(
     });
   }
 
-  const currentSession = curriculumSessionSchema.parse(readModel.currentSession);
+  const currentSession = curriculumSessionSchema.parse(
+    readModel.currentSession,
+  );
 
   if (currentSession.id !== readModel.currentSessionId) {
     return currentLessonResponseSchema.parse({
@@ -276,7 +304,11 @@ export async function markLessonComplete(
 
   const { profile, curriculum } = await loadCurrentCurriculum(actor);
 
-  if (profile === null || profile.currentTopicSlug === null || curriculum === null) {
+  if (
+    profile === null ||
+    profile.currentTopicSlug === null ||
+    curriculum === null
+  ) {
     throw new AppError({
       code: 'NOT_FOUND',
       message: 'No active lesson is available to complete.',
@@ -291,7 +323,10 @@ export async function markLessonComplete(
     { sessionId: input.sessionId },
   );
   const lesson = lessonPayloadSchema.parse(currentSession.lesson);
-  const nextSessionId = getNextSessionId(curriculum.layer2Sessions, input.sessionId);
+  const nextSessionId = getNextSessionId(
+    curriculum.layer2Sessions,
+    input.sessionId,
+  );
   const summary = createCompactSessionSummary({
     lesson,
     status: 'completed',

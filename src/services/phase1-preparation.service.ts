@@ -1,9 +1,9 @@
-﻿import {
+import {
   buildTopicKnowledgeDocument,
   discoverCartographerSources,
 } from '@/agents/cartographer/cartographer-agent';
 import { buildInitialCurriculumPlan } from '@/agents/curriculum-builder/curriculum-builder-agent';
-import { createLessonPayload } from '@/agents/teaching/teaching-agent';
+import { generateGroundedLessonPayload } from '@/agents/teaching/teaching-agent';
 import { curriculumRepository } from '@/db/curriculum.repo';
 import { jobsRepository } from '@/db/jobs.repo';
 import { knowledgeRepository } from '@/db/knowledge.repo';
@@ -50,6 +50,7 @@ type PreparationDependencies = {
   ragRepository: Pick<typeof ragRepository, 'writeMemory'>;
   queueLessonReadyAlert: typeof deliveryService.queueLessonReadyAlert;
   fetchSources: typeof fetchSources;
+  generateLesson: typeof generateGroundedLessonPayload;
 };
 
 const defaultDependencies: PreparationDependencies = {
@@ -61,6 +62,7 @@ const defaultDependencies: PreparationDependencies = {
   ragRepository,
   queueLessonReadyAlert: deliveryService.queueLessonReadyAlert,
   fetchSources,
+  generateLesson: generateGroundedLessonPayload,
 };
 
 function getPersistedLesson(curriculum: {
@@ -94,7 +96,10 @@ export function createPhase1PreparationService(
   dependencies: PreparationDependencies = defaultDependencies,
 ) {
   return {
-    async prepareFirstLesson(actor: DbActor): Promise<Phase1PreparationResult> {
+    async prepareFirstLesson(
+      actor: DbActor,
+      options: { forceRegenerate?: boolean; refreshKnowledge?: boolean } = {},
+    ): Promise<Phase1PreparationResult> {
       const profile =
         await dependencies.profileRepository.getCurrentProfile(actor);
 
@@ -125,7 +130,7 @@ export function createPhase1PreparationService(
           ? null
           : getPersistedLesson(existingCurriculum);
 
-      if (existingLesson !== null) {
+      if (existingLesson !== null && options.forceRegenerate !== true) {
         return phase1PreparationResultSchema.parse({
           status: 'already_prepared',
           topicSlug,
@@ -154,7 +159,7 @@ export function createPhase1PreparationService(
             topicSlug,
           );
 
-        if (knowledgeBase === null) {
+        if (knowledgeBase === null || options.refreshKnowledge === true) {
           const sourceResult = await dependencies.fetchSources(
             discoverCartographerSources(topicBrief),
           );
@@ -212,10 +217,11 @@ export function createPhase1PreparationService(
           throw new Error('Curriculum current-session pointer is invalid.');
         }
 
-        const lesson = createLessonPayload({
+        const lesson = await dependencies.generateLesson({
           topicSlug,
           session: currentSession,
           knowledgeBase,
+          profile,
         });
         const persistedCurriculum =
           await dependencies.curriculumRepository.saveGeneratedLesson(

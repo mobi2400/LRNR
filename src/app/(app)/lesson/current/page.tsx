@@ -4,6 +4,7 @@ import Link from 'next/link';
 
 import { AppShell } from '@/components/app-shell/AppShell';
 import { CompleteLessonButton } from '@/components/lesson/CompleteLessonButton';
+import { LessonDiagram } from '@/components/lesson/LessonDiagram';
 import {
   assertUnlockedOwnerSession,
   getSessionAccessState,
@@ -119,12 +120,7 @@ export default async function CurrentLessonPage(): Promise<JSX.Element> {
                 aria-labelledby="diagram-title"
               >
                 <h3 id="diagram-title">Diagram</h3>
-                <pre
-                  className="lesson-diagram"
-                  data-diagram-type={lesson.diagram.type}
-                >
-                  {lesson.diagram.content}
-                </pre>
+                <LessonDiagram diagram={lesson.diagram} />
               </section>
 
               {lesson.codeExamples.length === 0 ? null : (
@@ -189,15 +185,38 @@ export default async function CurrentLessonPage(): Promise<JSX.Element> {
                   </p>
                 ) : (
                   <ul className="source-list">
-                    {lesson.sourceReferences.map((source) => (
-                      <li key={`${source.label}-${source.url}`}>
-                        <a href={source.url} rel="noreferrer" target="_blank">
+                    {lesson.sourceReferences.map((source) => {
+                      const isInternal =
+                        source.kind === 'internal' ||
+                        source.url.startsWith('lrnr://');
+                      const content = (
+                        <>
                           <span>{source.label}</span>
                           <small>{source.url}</small>
-                          <em>External source</em>
-                        </a>
-                      </li>
-                    ))}
+                          <em>
+                            {isInternal
+                              ? 'Internal learning context'
+                              : 'External source'}
+                          </em>
+                        </>
+                      );
+
+                      return (
+                        <li key={`${source.label}-${source.url}`}>
+                          {isInternal ? (
+                            <div className="source-list__item">{content}</div>
+                          ) : (
+                            <a
+                              href={source.url}
+                              rel="noreferrer"
+                              target="_blank"
+                            >
+                              {content}
+                            </a>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </article>

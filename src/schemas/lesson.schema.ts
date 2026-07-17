@@ -22,6 +22,7 @@ export const lessonReviewQuestionSchema = z.object({
 export const lessonSourceReferenceSchema = z.object({
   label: z.string().trim().min(1).max(255),
   url: z.string().trim().min(1).max(2048),
+  kind: z.enum(['internal', 'external']).optional(),
 });
 
 export const lessonPayloadSchema = z.object({
@@ -46,7 +47,12 @@ export const lessonPayloadSchema = z.object({
 export const currentLessonResponseSchema = z.object({
   lesson: lessonPayloadSchema.nullable(),
   reasonIfEmpty: z
-    .enum(['no_active_topic', 'not_ready', 'waiting_for_onboarding', 'completed'])
+    .enum([
+      'no_active_topic',
+      'not_ready',
+      'waiting_for_onboarding',
+      'completed',
+    ])
     .optional(),
 });
 

@@ -1,7 +1,8 @@
-﻿import '../setup-env';
+import '../setup-env';
 
 import { describe, expect, it, vi } from 'vitest';
 
+import { createLessonPayload } from '@/agents/teaching/teaching-agent';
 import type { CurriculumStateRecord } from '@/db/curriculum.repo';
 import { curriculumSessionDocumentSchema } from '@/db/repository-helpers';
 import type { JobRunRecord } from '@/db/jobs.repo';
@@ -158,7 +159,23 @@ function createDependencies() {
       writeMemory: vi.fn().mockResolvedValue({}),
     },
     queueLessonReadyAlert: vi.fn().mockResolvedValue({}),
-    fetchSources: vi.fn(),
+    fetchSources: vi.fn().mockResolvedValue({
+      fetched: [
+        {
+          name: 'System Design brief',
+          url: `lrnr://topic-briefs/${topicBrief.id}`,
+          sourceType: 'topic_brief',
+          credibilityTier: 'tier_1',
+          isCritical: true,
+          seedText: 'Grounded learner brief',
+          retrievedAt: now.toISOString(),
+          content: 'Grounded learner brief',
+          relevantSections: [],
+        },
+      ],
+      failed: [],
+    }),
+    generateLesson: vi.fn(async (input) => createLessonPayload(input)),
   };
 }
 
@@ -187,6 +204,25 @@ describe('Phase 1 preparation service', () => {
     );
   });
 
+  it('force-regenerates an existing lesson and refreshes its knowledge', async () => {
+    const dependencies = createDependencies();
+    const service = createPhase1PreparationService(dependencies);
+
+    await service.prepareFirstLesson(actor);
+    const regenerated = await service.prepareFirstLesson(actor, {
+      forceRegenerate: true,
+      refreshKnowledge: true,
+    });
+
+    expect(regenerated.status).toBe('prepared');
+    expect(dependencies.generateLesson).toHaveBeenCalledTimes(2);
+    expect(
+      dependencies.knowledgeRepository.upsertTopicKnowledgeBase,
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      dependencies.curriculumRepository.saveGeneratedLesson,
+    ).toHaveBeenCalledTimes(2);
+  });
   it('returns the persisted lesson without regenerating on retry', async () => {
     const dependencies = createDependencies();
     const service = createPhase1PreparationService(dependencies);

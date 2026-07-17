@@ -1,6 +1,4 @@
-import {
-  extractStructured,
-} from '@/lib/llm';
+import { extractStructured } from '@/lib/llm';
 import {
   type FetchedSource,
   type KnowledgeProvenance,
@@ -49,6 +47,16 @@ function provenanceFromSource(source: FetchedSource): KnowledgeProvenance {
   };
 }
 
+function sourceExcerpt(source: FetchedSource): string {
+  return source.content
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&[a-zA-Z0-9#]+;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 1_400);
+}
 function credibilitySignal(source: FetchedSource): string {
   if (source.sourceType === 'topic_brief') {
     return 'Architect handoff for this owner and topic.';
@@ -57,6 +65,38 @@ function credibilitySignal(source: FetchedSource): string {
   return `${source.credibilityTier.replace('_', ' ')} ${source.sourceType.replace('_', ' ')} source.`;
 }
 
+function curatedSourcesFor(topicBrief: TopicBriefRecord): SourceCandidate[] {
+  const topic =
+    `${topicBrief.title} ${topicBrief.goal} ${topicBrief.topicSlug}`.toLowerCase();
+
+  if (!topic.includes('system design') && !topic.includes('sysytem-design')) {
+    return [];
+  }
+
+  return [
+    {
+      name: 'AWS Well-Architected Framework',
+      url: 'https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html',
+      sourceType: 'official_docs',
+      credibilityTier: 'tier_1',
+      isCritical: true,
+    },
+    {
+      name: 'Google Site Reliability Engineering book',
+      url: 'https://sre.google/sre-book/table-of-contents/',
+      sourceType: 'official_docs',
+      credibilityTier: 'tier_1',
+      isCritical: true,
+    },
+    {
+      name: 'Cloudflare learning center: load balancing',
+      url: 'https://www.cloudflare.com/learning/performance/what-is-load-balancing/',
+      sourceType: 'tutorial',
+      credibilityTier: 'tier_2',
+      isCritical: false,
+    },
+  ];
+}
 export function discoverCartographerSources(
   topicBrief: TopicBriefRecord,
 ): SourceCandidate[] {
@@ -85,7 +125,10 @@ export function discoverCartographerSources(
     isCritical: false,
   }));
 
-  return [internalSource, ...externalSources];
+  return uniqueBy(
+    [internalSource, ...curatedSourcesFor(topicBrief), ...externalSources],
+    (source) => source.url,
+  );
 }
 
 export async function buildTopicKnowledgeDocument(
@@ -103,7 +146,9 @@ export async function buildTopicKnowledgeDocument(
       );
 
       if (strongSources.length === 0) {
-        throw new Error('Cartographer could not produce knowledge without a usable source.');
+        throw new Error(
+          'Cartographer could not produce knowledge without a usable source.',
+        );
       }
 
       const primarySource = strongSources[0] as FetchedSource;
@@ -158,6 +203,14 @@ export async function buildTopicKnowledgeDocument(
             conceptSlug: topicBrief.topicSlug,
             provenance: primaryProvenance,
           },
+          ...strongSources
+            .filter((source) => source.sourceType !== 'topic_brief')
+            .slice(0, 6)
+            .map((source) => ({
+              claim: source.content.replace(/\s+/g, ' ').trim().slice(0, 1_400),
+              conceptSlug: topicBrief.topicSlug,
+              provenance: [provenanceFromSource(source)],
+            })),
         ],
         limitations: [
           {

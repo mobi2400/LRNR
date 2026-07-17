@@ -1222,11 +1222,41 @@ button:disabled,
   border-radius: var(--lrnr-radius-card);
   background: var(--lrnr-surface-muted);
   color: var(--lrnr-text-primary);
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   line-height: 1.6;
   margin: 0;
   padding: var(--lrnr-space-5);
-  white-space: pre;
+}
+
+.lesson-diagram-flow {
+  display: flex;
+  align-items: center;
+  gap: var(--lrnr-space-3);
+  list-style: none;
+}
+
+.lesson-diagram-step {
+  display: flex;
+  align-items: center;
+  gap: var(--lrnr-space-3);
+  min-width: max-content;
+}
+
+.lesson-diagram-node {
+  border: 1px solid var(--lrnr-border-strong);
+  border-radius: var(--lrnr-radius-control);
+  background: var(--lrnr-surface-raised);
+  font-weight: 750;
+  padding: var(--lrnr-space-3) var(--lrnr-space-4);
+}
+
+.lesson-diagram-arrow {
+  color: var(--lrnr-accent);
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.lesson-diagram--description p {
+  margin: 0;
 }
 
 .lesson-code-block {
@@ -1285,7 +1315,8 @@ button:disabled,
   list-style: none;
 }
 
-.source-list a {
+.source-list a,
+.source-list__item {
   display: grid;
   gap: var(--lrnr-space-1);
   border: 1px solid var(--lrnr-border-soft);

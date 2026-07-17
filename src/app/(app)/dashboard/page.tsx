@@ -1,4 +1,4 @@
-import type { JSX } from 'react';
+﻿import type { JSX } from 'react';
 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/app-shell/AppShell';
 import { buildDashboardViewModel } from '@/components/dashboard/dashboard-view-model';
 import { OnboardingPanel } from '@/components/onboarding/OnboardingPanel';
+import { PrepareLearningPathButton } from '@/components/onboarding/PrepareLearningPathButton';
 import {
   assertUnlockedOwnerSession,
   clearSessionCookies,
@@ -164,6 +165,25 @@ export default async function DashboardPage(): Promise<JSX.Element> {
               <OnboardingPanel />
             </section>
           )}
+          {viewModel.mode === 'lesson_not_ready' &&
+          dashboard.topic.totalSessionCount === 0 ? (
+            <section
+              className="dashboard-onboarding"
+              aria-labelledby="prepare-path-title"
+            >
+              <div className="section-heading">
+                <p className="cockpit-kicker">Path preparation</p>
+                <h2 id="prepare-path-title">
+                  Turn your onboarding answers into the first lesson.
+                </h2>
+                <p>
+                  Your answers are saved. LRNR will now research the topic,
+                  build the curriculum, and persist the first lesson.
+                </p>
+              </div>
+              <PrepareLearningPathButton />
+            </section>
+          ) : null}
         </div>
       </section>
     </AppShell>

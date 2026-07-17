@@ -465,7 +465,8 @@ ApiSuccess<{
 Rules:
 
 - if onboarding completes, create profile/topic brief/RAG seed
-- may enqueue or start daily learning workflow
+- starts the bounded Phase 1 preparation handoff after the onboarding transaction commits
+- onboarding remains complete if downstream preparation fails; the failed `curriculum_build` job remains retryable
 
 ---
 
@@ -576,6 +577,42 @@ Rules:
 - use current session/topic knowledge/RAG context
 - Phase 1 can keep this simple
 - if evidence is weak, say so
+
+---
+
+## `POST /api/workflows/phase1/prepare`
+
+Auth:
+
+```text
+unlocked_owner
+```
+
+Headers:
+
+```text
+Idempotency-Key: required
+```
+
+Returns:
+
+```ts
+ApiSuccess<{
+  status: 'prepared' | 'already_prepared';
+  topicSlug: string;
+  sessionId: string;
+  lessonReady: true;
+  repairableFailures: Array<'delivery' | 'rag'>;
+}>
+```
+
+Rules:
+
+- requires a completed owner profile and topic brief
+- runs Cartographer, initial Curriculum Builder, Teaching, lesson persistence, and post-lesson side effects in dependency order
+- reuses existing topic knowledge and curriculum state
+- returns the persisted lesson on retry without regenerating or duplicating the lesson-ready alert
+- records `curriculum_build` as running, succeeded, or failed in `job_runs`
 
 ---
 

@@ -35,6 +35,8 @@ import {
 import type { RagMemoryWriteInput } from '@/db/rag.repo';
 import type { UpsertProfileInput } from '@/db/profile.repo';
 import type { UpsertTopicBriefInput } from '@/db/topic-briefs.repo';
+import { appLogger } from '@/lib/logger';
+import { phase1PreparationService } from '@/services/phase1-preparation.service';
 
 const ONBOARDING_JOB_TYPE = 'architect_onboarding';
 const IDEMPOTENCY_TTL_MS = 1000 * 60 * 60 * 24;
@@ -391,6 +393,19 @@ export function createOnboardingService() {
 
       if (topicBriefId === null) {
         throw new Error('Onboarding completion transaction did not return a topic brief id.');
+      }
+
+      // Onboarding remains durable even if downstream preparation fails. The
+      // failed curriculum_build job is visible and the owner can retry safely.
+      try {
+        await phase1PreparationService.prepareFirstLesson(actor);
+      } catch (error) {
+        appLogger.error('phase1.initial_preparation_failed', {
+          requestId: actor.requestId,
+          userId: actor.userId,
+          topicBriefId,
+          error: error instanceof Error ? error.message : 'unknown',
+        });
       }
 
       return {

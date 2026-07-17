@@ -319,16 +319,17 @@ Expected:
 
 1. Submit a learning goal.
 2. Complete onboarding.
-3. Run daily learning workflow.
-4. Verify job run status.
-5. Verify topic brief exists.
-6. Verify topic knowledge base exists.
-7. Verify curriculum state exists.
-8. Verify current lesson exists.
-9. Verify RAG onboarding seed exists.
-10. Verify Telegram alert sends.
-11. Rerun workflow.
-12. Verify duplicate lesson/alert is not created.
+3. Verify initial Phase 1 preparation runs automatically; if it failed or onboarding predates the handoff, use the dashboard recovery action.
+4. Run daily learning workflow for subsequent sessions.
+5. Verify job run status.
+6. Verify topic brief exists.
+7. Verify topic knowledge base exists.
+8. Verify curriculum state exists.
+9. Verify current lesson exists.
+10. Verify RAG onboarding seed exists.
+11. Verify Telegram alert sends.
+12. Rerun workflow.
+13. Verify duplicate lesson/alert is not created.
 
 ### Frontend Smoke Test
 

@@ -878,4 +878,4 @@ The production Teaching Agent generates a Zod-validated lesson through the appro
 
 Persisted source references are constrained to Cartographer's validated source inventory and identify internal LRNR context separately from external sources. The lesson page renders supported Mermaid flowcharts as accessible concept nodes; unsupported diagram syntax falls back to readable text rather than appearing as raw diagram code.
 
-Initial System Design research includes bounded first-party sources from AWS, Google SRE, and Cloudflare. Provider calls retain timeout, retry, safe error handling, and runtime output validation in the shared LLM wrapper.
+Initial System Design research includes bounded first-party sources from AWS, Google SRE, and Cloudflare. Gemini provider calls retain timeout, retry, safe error handling, and runtime output validation in the shared LLM wrapper.

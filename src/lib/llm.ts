@@ -6,9 +6,9 @@ import { assertServerOnly } from '@/utils/server-only';
 
 assertServerOnly('src/lib/llm.ts');
 
-const GROQ_CHAT_COMPLETIONS_URL =
-  'https://api.groq.com/openai/v1/chat/completions';
-const DEFAULT_REASONING_MODEL = 'llama-3.3-70b-versatile';
+const GEMINI_GENERATE_CONTENT_BASE_URL =
+  'https://generativelanguage.googleapis.com/v1beta/models';
+const DEFAULT_REASONING_MODEL = 'gemini-2.5-flash';
 const DEFAULT_TIMEOUT_MS = 45_000;
 
 export interface StructuredExtractionInput<TOutput> {
@@ -28,12 +28,18 @@ export interface StructuredGenerationInput<TOutput> {
   fetchImpl?: typeof fetch;
 }
 
-const groqChatResponseSchema = z.object({
-  choices: z
+const geminiGenerateContentResponseSchema = z.object({
+  candidates: z
     .array(
       z.object({
-        message: z.object({
-          content: z.string().min(1),
+        content: z.object({
+          parts: z
+            .array(
+              z.object({
+                text: z.string().min(1),
+              }),
+            )
+            .min(1),
         }),
       }),
     )
@@ -75,24 +81,34 @@ export async function generateStructured<TOutput>(
   try {
     const response = await pRetry(
       async () => {
-        const nextResponse = await fetchImpl(GROQ_CHAT_COMPLETIONS_URL, {
-          method: 'POST',
-          signal: controller.signal,
-          headers: {
-            authorization: `Bearer ${serverConfig.providers.llmApiKey}`,
-            'content-type': 'application/json',
+        const model = input.model ?? DEFAULT_REASONING_MODEL;
+        const nextResponse = await fetchImpl(
+          `${GEMINI_GENERATE_CONTENT_BASE_URL}/${model}:generateContent`,
+          {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+              'x-goog-api-key': serverConfig.providers.llmApiKey,
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+              system_instruction: {
+                parts: [{ text: input.system }],
+              },
+              contents: [
+                {
+                  role: 'user',
+                  parts: [{ text: input.prompt }],
+                },
+              ],
+              generationConfig: {
+                temperature: input.temperature ?? 0.35,
+                maxOutputTokens: input.maxTokens ?? 4_000,
+                responseMimeType: 'application/json',
+              },
+            }),
           },
-          body: JSON.stringify({
-            model: input.model ?? DEFAULT_REASONING_MODEL,
-            temperature: input.temperature ?? 0.35,
-            max_completion_tokens: input.maxTokens ?? 4_000,
-            response_format: { type: 'json_object' },
-            messages: [
-              { role: 'system', content: input.system },
-              { role: 'user', content: input.prompt },
-            ],
-          }),
-        });
+        );
 
         if (!nextResponse.ok) {
           const safeBody = (await nextResponse.text()).slice(0, 500);
@@ -112,8 +128,12 @@ export async function generateStructured<TOutput>(
       { retries: 2 },
     );
 
-    const result = groqChatResponseSchema.parse(await response.json());
-    const content = result.choices[0]?.message.content;
+    const result = geminiGenerateContentResponseSchema.parse(
+      await response.json(),
+    );
+    const content = result.candidates[0]?.content.parts
+      .map((part) => part.text)
+      .join('');
 
     if (content === undefined) {
       throw new Error(`${input.label} returned no structured content.`);

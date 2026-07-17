@@ -163,6 +163,79 @@ describe('daily learning service', () => {
     expect(deps.generateCurrentLesson).not.toHaveBeenCalled();
   });
 
+  it('runs a two-day lifecycle without regenerating or redelivering Day 2', async () => {
+    const day1 = session({
+      id: 'day-1',
+      dayNumber: 1,
+      status: 'ready',
+      lesson,
+    });
+    const day2Lesson = { ...lesson, sessionId: 'day-2', title: 'Day 2 lesson' };
+    let currentSessionId = 'day-1';
+    let generated = false;
+    const deps = dependencies({
+      sessions: [
+        day1,
+        session({ id: 'day-2', dayNumber: 2, status: 'planned' }),
+      ],
+      currentSessionId,
+    });
+    deps.curriculumRepository.getActiveCurriculum.mockImplementation(
+      async () => ({
+        id: '11111111-1111-4111-8111-111111111111',
+        userId: actor.userId,
+        topicBriefId: null,
+        topicSlug: 'system-design',
+        status: 'active' as const,
+        layer1Roadmap: {},
+        layer2Sessions: [
+          currentSessionId === 'day-1'
+            ? day1
+            : { ...day1, status: 'completed' as const },
+          session({
+            id: 'day-2',
+            dayNumber: 2,
+            status: generated ? 'ready' : 'planned',
+            ...(generated ? { lesson: day2Lesson } : {}),
+          }),
+        ],
+        layer3LiveQueue: [],
+        currentSessionId,
+        currentSessionIndex: currentSessionId === 'day-1' ? 0 : 1,
+        revision: generated ? 6 : 5,
+        lastDeliveredAt: null,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    );
+    deps.generateCurrentLesson.mockImplementation(async () => {
+      generated = true;
+      return lessonPayloadSchema.parse(day2Lesson);
+    });
+    const service = createDailyLearningService(deps);
+
+    const firstDay = await service.run(
+      actor,
+      new Date('2026-07-20T01:30:00.000Z'),
+    );
+    expect(firstDay.reason).toBe('current_lesson_already_ready');
+
+    currentSessionId = 'day-2';
+    const secondDay = await service.run(
+      actor,
+      new Date('2026-07-21T01:30:00.000Z'),
+    );
+    const replay = await service.run(
+      actor,
+      new Date('2026-07-21T01:35:00.000Z'),
+    );
+
+    expect(secondDay.status).toBe('prepared');
+    expect(replay.reason).toBe('current_lesson_already_ready');
+    expect(deps.generateCurrentLesson).toHaveBeenCalledTimes(1);
+    expect(deps.queueLessonReadyAlert).toHaveBeenCalledTimes(1);
+    expect(deps.writeMemory).toHaveBeenCalledTimes(1);
+  });
   it('pauses teaching when evaluation is due after enough completed lessons', async () => {
     const deps = dependencies({
       sessions: [

@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 export const requiredDeploymentEnvKeys = [
   'APP_URL',
   'ACCESS_MODE',
+  'OWNER_USER_ID',
   'OWNER_EMAIL',
   'AUTH_SECRET',
   'LRNR_ACCESS_SECRET_HASH',
@@ -32,6 +33,7 @@ export interface DeploymentReadinessReport {
   configured: string[];
   missing: string[];
   missingArtifacts: string[];
+  invalid: string[];
 }
 
 export function buildDeploymentReadinessReport(
@@ -40,6 +42,7 @@ export function buildDeploymentReadinessReport(
 ): DeploymentReadinessReport {
   const configured: string[] = [];
   const missing: string[] = [];
+  const invalid: string[] = [];
 
   for (const key of requiredDeploymentEnvKeys) {
     const value = env[key];
@@ -51,15 +54,29 @@ export function buildDeploymentReadinessReport(
     }
   }
 
+  const redisUrl = env.REDIS_URL;
+  if (redisUrl !== undefined && redisUrl.trim().length > 0) {
+    try {
+      const protocol = new URL(redisUrl).protocol;
+      if (protocol !== 'redis:' && protocol !== 'rediss:')
+        invalid.push('REDIS_URL');
+    } catch {
+      invalid.push('REDIS_URL');
+    }
+  }
   const missingArtifacts = requiredRuntimeArtifacts.filter(
     (artifact) => !artifactExists(artifact),
   );
 
   return {
-    ready: missing.length === 0 && missingArtifacts.length === 0,
+    ready:
+      missing.length === 0 &&
+      missingArtifacts.length === 0 &&
+      invalid.length === 0,
     configured,
     missing,
     missingArtifacts: [...missingArtifacts],
+    invalid,
   };
 }
 
@@ -70,6 +87,8 @@ function printReport(report: DeploymentReadinessReport): void {
 
   if (!report.ready) {
     console.log(`missing=${report.missing.join(', ')}`);
+    console.log(`missingArtifacts=${report.missingArtifacts.join(', ')}`);
+    console.log(`invalid=${report.invalid.join(', ')}`);
   }
 }
 

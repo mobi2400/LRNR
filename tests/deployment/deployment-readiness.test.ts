@@ -22,10 +22,17 @@ describe('deployment readiness gate', () => {
     expect(report.ready).toBe(false);
     expect(report.missingArtifacts).toContain('scripts/run-daily-learning.ts');
   });
+  it('fails closed for a malformed Redis URL', () => {
+    const report = buildDeploymentReadinessReport({ REDIS_URL: 'not-a-url' });
+
+    expect(report.ready).toBe(false);
+    expect(report.invalid).toContain('REDIS_URL');
+  });
   it('does not expose configured secret values', () => {
     const report = buildDeploymentReadinessReport({
       APP_URL: 'https://lrnr.test',
       ACCESS_MODE: 'owner_only',
+      OWNER_USER_ID: '00000000-0000-4000-8000-000000000001',
       OWNER_EMAIL: 'owner@example.com',
       AUTH_SECRET: 'secret',
       LRNR_ACCESS_SECRET_HASH: 'hash',

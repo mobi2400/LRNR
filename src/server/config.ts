@@ -34,7 +34,11 @@ export const serverConfig = {
   },
   providers: {
     llmApiKey: env.LLM_API_KEY,
+    // Model ids are configurable so we can track Gemini's release line without
+    // code changes. Defaults are the current general-availability models.
+    llmModel: env.LLM_MODEL ?? 'gemini-2.5-flash',
     embeddingApiKey: env.EMBEDDING_API_KEY,
+    embeddingModel: env.EMBEDDING_MODEL ?? 'gemini-embedding-001',
   },
   telegram: {
     botToken: env.TELEGRAM_BOT_TOKEN,

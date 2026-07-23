@@ -95,11 +95,13 @@ interface OnboardingCompletionPlan {
   jobOutput: Record<string, unknown>;
 }
 
+type OnboardingProgress = Awaited<ReturnType<typeof applyOnboardingAnswer>>;
+
 export function buildOnboardingCompletionPlan(
   actor: DbActor,
-  progress: ReturnType<typeof applyOnboardingAnswer> & {
+  progress: OnboardingProgress & {
     completed: true;
-    completionSummary: NonNullable<ReturnType<typeof applyOnboardingAnswer>['completionSummary']>;
+    completionSummary: NonNullable<OnboardingProgress['completionSummary']>;
   },
 ): OnboardingCompletionPlan {
   const topicSlug = progress.completionSummary.topicBlueprint.topicSlug;
@@ -237,7 +239,7 @@ export function createOnboardingService() {
         idempotencyKey: `job:${ONBOARDING_JOB_TYPE}:${idempotencyKey}`,
         startedAt: new Date(),
       });
-      const state = createInitialOnboardingState({
+      const state = await createInitialOnboardingState({
         goal: validatedInput.goal,
         onboardingId: jobRun.id,
         ...(validatedInput.background === undefined
@@ -301,7 +303,7 @@ export function createOnboardingService() {
         });
       }
 
-      const progress = applyOnboardingAnswer(
+      const progress = await applyOnboardingAnswer(
         parseStateFromJob(job.output),
         validatedInput.answer,
       );

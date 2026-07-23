@@ -94,6 +94,9 @@ export const onboardingReplyResponseSchema = z.object({
 
 export type PreferredDepth = z.infer<typeof preferredDepthSchema>;
 export type OnboardingStatus = z.infer<typeof onboardingStatusSchema>;
+export type OnboardingQuestionKind = z.infer<
+  typeof onboardingQuestionKindSchema
+>;
 export type OnboardingQuestion = z.infer<typeof onboardingQuestionSchema>;
 export type OnboardingTurn = z.infer<typeof onboardingTurnSchema>;
 export type OnboardingTopicBlueprint = z.infer<

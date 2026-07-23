@@ -1,9 +1,17 @@
 import { randomUUID } from 'node:crypto';
 
+import { z } from 'zod';
+
+import { generateStructured, type StructuredGenerationInput } from '@/lib/llm';
+import { serverConfig } from '@/server/config';
 import {
   architectOnboardingStateSchema,
+  onboardingQuestionKindSchema,
+  onboardingTopicBlueprintSchema,
+  preferredDepthSchema,
   type ArchitectOnboardingState,
   type OnboardingQuestion,
+  type OnboardingQuestionKind,
   type OnboardingTopicBlueprint,
   type OnboardingTurn,
   type PreferredDepth,
@@ -39,6 +47,35 @@ export interface PlannedRagSeedEntry {
   metadata: Record<string, unknown>;
   idempotencySuffix: string;
 }
+
+/**
+ * Structured generator seam. `undefined` resolves to the real LLM in
+ * production and the deterministic path under test/offline; `null` forces the
+ * deterministic path; a function overrides it (used to exercise the LLM path in
+ * tests). Keeping this seam means onboarding never hard-fails on a model error.
+ */
+export type ArchitectGenerator =
+  | (<TOutput>(input: StructuredGenerationInput<TOutput>) => Promise<TOutput>)
+  | null;
+
+function resolveGenerator(
+  generate: ArchitectGenerator | undefined,
+): (<TOutput>(input: StructuredGenerationInput<TOutput>) => Promise<TOutput>) | null {
+  if (generate === null) {
+    return null;
+  }
+
+  if (generate === undefined) {
+    return serverConfig.nodeEnv === 'test' ? null : generateStructured;
+  }
+
+  return generate;
+}
+
+// Discovery is capped so a model that never volunteers completion still ends.
+const MAX_TURNS = 5;
+// The deterministic path mirrors the original fixed four-question interview.
+const DETERMINISTIC_TURN_COUNT = 4;
 
 const topicProfiles: Array<{
   match: RegExp;
@@ -125,7 +162,8 @@ function findTopicProfile(goal: string) {
   );
 }
 
-function buildQuestions(goal: string): OnboardingQuestion[] {
+/** The deterministic interview: a fixed, kind-ordered question sequence. */
+function deterministicQuestions(goal: string): OnboardingQuestion[] {
   const topicProfile = findTopicProfile(goal);
 
   return [
@@ -204,8 +242,11 @@ function extractSignals(answer: string): {
   };
 }
 
-function getTurnAnswer(turns: OnboardingTurn[], questionId: string): string | null {
-  return turns.find((turn) => turn.questionId === questionId)?.answer ?? null;
+function getTurnAnswerByKind(
+  turns: OnboardingTurn[],
+  kind: OnboardingQuestionKind,
+): string | null {
+  return turns.find((turn) => turn.questionKind === kind)?.answer ?? null;
 }
 
 function buildTopicBlueprint(
@@ -223,60 +264,219 @@ function buildTopicBlueprint(
   };
 }
 
-export function createInitialOnboardingState(
-  input: StartOnboardingInput,
-): ArchitectOnboardingState {
-  const goal = input.goal.trim();
-  const questions = buildQuestions(goal);
+// ---------------------------------------------------------------------------
+// LLM-driven conversational discovery
+// ---------------------------------------------------------------------------
 
-  return architectOnboardingStateSchema.parse({
-    onboardingId: input.onboardingId ?? randomUUID(),
-    status: 'awaiting_reply',
-    goal,
-    background: input.background?.trim() || null,
-    preferredDepth: input.preferredDepth ?? 'beginner',
-    questions,
-    currentQuestionIndex: 0,
-    currentQuestion: questions[0]?.question ?? null,
-    turns: [],
-    inferredBackground:
-      input.background === undefined ? [] : [input.background.trim()].filter(Boolean),
-    detectedStrengths: [],
-    detectedWeakAreas: [],
-    detectedMisconceptions: [],
-    topicBlueprint: null,
-    completedAt: null,
+const architectSystemPrompt = `You are LRNR's Architect agent running a short discovery interview with one learner.
+Your job is to understand their real starting point, not to survey them.
+
+Rules:
+- Ask one focused question at a time. Adapt each question to what they just said.
+- Probe for demonstrated understanding; do not accept self-assessment at face value.
+- Detect genuine strengths, weak areas, and misconceptions from their answers.
+- Stop when you have enough to design a personalized path (usually 3-5 turns).
+- When done, produce a topic blueprint: the real prerequisite chain and an ordered concept outline for their goal, at the appropriate depth.
+- Return one JSON object, no markdown fence.`;
+
+const firstQuestionSchema = z.object({
+  question: z.string().trim().min(1).max(2000),
+  kind: onboardingQuestionKindSchema,
+});
+
+const turnDecisionSchema = z.object({
+  inferredBackground: z.array(z.string().trim().min(1)).default([]),
+  strengths: z.array(z.string().trim().min(1)).default([]),
+  weakAreas: z.array(z.string().trim().min(1)).default([]),
+  misconceptions: z.array(z.string().trim().min(1)).default([]),
+  tags: z.array(z.string().trim().min(1)).default([]),
+  complete: z.boolean(),
+  nextQuestion: firstQuestionSchema.nullable().default(null),
+  blueprint: z
+    .object({
+      title: z.string().trim().min(1),
+      requiredDepth: preferredDepthSchema,
+      prerequisiteMap: z.array(z.string().trim().min(1)).default([]),
+      conceptOutline: z.array(z.string().trim().min(1)).default([]),
+    })
+    .nullable()
+    .default(null),
+  motivation: z.string().trim().min(1).nullable().default(null),
+  priorAttempts: z.string().trim().min(1).nullable().default(null),
+  dailyConstraint: z.string().trim().min(1).nullable().default(null),
+});
+
+function cap(values: string[], max: number): string[] {
+  return uniqueStrings(values.map((value) => value.slice(0, 255))).slice(0, max);
+}
+
+function toQuestion(
+  input: { question: string; kind: OnboardingQuestionKind },
+  index: number,
+): OnboardingQuestion {
+  return {
+    id: `q-${index}-${input.kind}`,
+    kind: input.kind,
+    question: input.question.slice(0, 2000),
+  };
+}
+
+function transcript(turns: OnboardingTurn[]): string {
+  if (turns.length === 0) {
+    return '(no answers yet)';
+  }
+
+  return turns
+    .map((turn, index) => `Turn ${index + 1} [${turn.questionKind}]\nA: ${turn.answer}`)
+    .join('\n');
+}
+
+async function generateFirstQuestion(
+  input: StartOnboardingInput,
+  generate: <TOutput>(input: StructuredGenerationInput<TOutput>) => Promise<TOutput>,
+): Promise<OnboardingQuestion> {
+  const decision = await generate({
+    label: 'architect_first_question',
+    system: architectSystemPrompt,
+    prompt: `Learner goal: ${input.goal}
+Stated background: ${input.background ?? '(none given)'}
+Preferred depth: ${input.preferredDepth ?? 'beginner'}
+
+Ask the single best opening discovery question. Return { "question": "...", "kind": "motivation|background|probe|constraints" }.`,
+    schema: firstQuestionSchema,
+    temperature: 0.4,
+    maxTokens: 500,
+  });
+
+  return toQuestion(decision, 0);
+}
+
+function blueprintFromDecision(
+  state: ArchitectOnboardingState,
+  decision: z.infer<typeof turnDecisionSchema>,
+): OnboardingTopicBlueprint {
+  if (decision.blueprint === null) {
+    return buildTopicBlueprint(state.goal, state.preferredDepth);
+  }
+
+  return onboardingTopicBlueprintSchema.parse({
+    topicSlug: toSlug(state.goal),
+    title: decision.blueprint.title.slice(0, 255),
+    requiredDepth: decision.blueprint.requiredDepth,
+    prerequisiteMap: cap(decision.blueprint.prerequisiteMap, 12),
+    conceptOutline: cap(decision.blueprint.conceptOutline, 16),
   });
 }
 
-export function applyOnboardingAnswer(
+async function applyLlmAnswer(
   state: ArchitectOnboardingState,
-  rawAnswer: string,
-): ProgressResult {
-  const answer = rawAnswer.trim();
-  const question = state.questions[state.currentQuestionIndex];
+  answer: string,
+  question: OnboardingQuestion,
+  generate: <TOutput>(input: StructuredGenerationInput<TOutput>) => Promise<TOutput>,
+): Promise<ProgressResult> {
+  const nextTurnCount = state.turns.length + 1;
+  const decision = await generate({
+    label: 'architect_turn',
+    system: architectSystemPrompt,
+    prompt: `Learner goal: ${state.goal}
+Preferred depth: ${state.preferredDepth}
+Turns so far (${state.turns.length}):
+${transcript(state.turns)}
 
-  if (question === undefined || state.status === 'completed') {
-    return {
-      state,
-      completed: state.status === 'completed',
-      completionSummary:
-        state.status === 'completed'
-          ? {
-              state,
-              topicBlueprint:
-                state.topicBlueprint ??
-                buildTopicBlueprint(state.goal, state.preferredDepth),
-              motivation: getTurnAnswer(state.turns, 'motivation'),
-              priorAttempts: getTurnAnswer(state.turns, 'constraints'),
-              dailyConstraint: getTurnAnswer(state.turns, 'constraints'),
-            }
-          : null,
-    };
+Just asked [${question.kind}]: ${question.question}
+Learner answered: ${answer}
+
+This is turn ${nextTurnCount} of at most ${MAX_TURNS}. Extract signals from the answer.
+Decide whether discovery is complete. If not complete, provide the next adaptive question.
+If complete (or this is the final allowed turn), provide the topic blueprint.
+Return JSON: { "inferredBackground": [], "strengths": [], "weakAreas": [], "misconceptions": [], "tags": [], "complete": bool, "nextQuestion": {"question","kind"}|null, "blueprint": {"title","requiredDepth","prerequisiteMap":[],"conceptOutline":[]}|null, "motivation": str|null, "priorAttempts": str|null, "dailyConstraint": str|null }`,
+    schema: turnDecisionSchema,
+    temperature: 0.35,
+    maxTokens: 1_500,
+  });
+
+  const forcedComplete = nextTurnCount >= MAX_TURNS;
+  const isComplete = decision.complete || forcedComplete || decision.nextQuestion === null;
+  const nextTurns: OnboardingTurn[] = [
+    ...state.turns,
+    {
+      questionId: question.id,
+      questionKind: question.kind,
+      question: question.question,
+      answer,
+      tags: cap(decision.tags, 8),
+    },
+  ];
+  const nextQuestion =
+    isComplete || decision.nextQuestion === null
+      ? null
+      : toQuestion(decision.nextQuestion, state.questions.length);
+  const questions =
+    nextQuestion === null ? state.questions : [...state.questions, nextQuestion];
+  const topicBlueprint = isComplete
+    ? blueprintFromDecision(state, decision)
+    : null;
+
+  const nextState = architectOnboardingStateSchema.parse({
+    ...state,
+    status: isComplete ? 'completed' : 'awaiting_reply',
+    currentQuestionIndex: isComplete
+      ? state.currentQuestionIndex
+      : questions.length - 1,
+    currentQuestion: nextQuestion?.question ?? null,
+    questions,
+    turns: nextTurns,
+    inferredBackground: uniqueStrings([
+      ...state.inferredBackground,
+      ...decision.inferredBackground,
+    ]),
+    detectedStrengths: uniqueStrings([
+      ...state.detectedStrengths,
+      ...decision.strengths,
+    ]),
+    detectedWeakAreas: uniqueStrings([
+      ...state.detectedWeakAreas,
+      ...decision.weakAreas,
+    ]),
+    detectedMisconceptions: uniqueStrings([
+      ...state.detectedMisconceptions,
+      ...decision.misconceptions,
+    ]),
+    topicBlueprint,
+    completedAt: isComplete ? new Date().toISOString() : null,
+  });
+
+  if (!isComplete || topicBlueprint === null) {
+    return { state: nextState, completed: false, completionSummary: null };
   }
 
+  return {
+    state: nextState,
+    completed: true,
+    completionSummary: {
+      state: nextState,
+      topicBlueprint,
+      motivation:
+        decision.motivation ?? getTurnAnswerByKind(nextTurns, 'motivation'),
+      priorAttempts:
+        decision.priorAttempts ?? getTurnAnswerByKind(nextTurns, 'constraints'),
+      dailyConstraint:
+        decision.dailyConstraint ?? getTurnAnswerByKind(nextTurns, 'constraints'),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic path (test/offline and resilient fallback)
+// ---------------------------------------------------------------------------
+
+function applyDeterministicAnswer(
+  state: ArchitectOnboardingState,
+  answer: string,
+  question: OnboardingQuestion,
+): ProgressResult {
   const signals = extractSignals(answer);
-  const nextTurns = [
+  const nextTurns: OnboardingTurn[] = [
     ...state.turns,
     {
       questionId: question.id,
@@ -286,8 +486,12 @@ export function applyOnboardingAnswer(
       tags: signals.tags,
     },
   ];
+  const allQuestions = deterministicQuestions(state.goal);
   const nextIndex = state.currentQuestionIndex + 1;
-  const isComplete = nextIndex >= state.questions.length;
+  const isComplete = nextIndex >= DETERMINISTIC_TURN_COUNT;
+  const nextQuestion = isComplete ? null : allQuestions[nextIndex] ?? null;
+  const questions =
+    nextQuestion === null ? state.questions : [...state.questions, nextQuestion];
   const topicBlueprint = isComplete
     ? buildTopicBlueprint(state.goal, state.preferredDepth)
     : null;
@@ -296,7 +500,8 @@ export function applyOnboardingAnswer(
     ...state,
     status: isComplete ? 'completed' : 'awaiting_reply',
     currentQuestionIndex: nextIndex,
-    currentQuestion: isComplete ? null : (state.questions[nextIndex]?.question ?? null),
+    currentQuestion: nextQuestion?.question ?? null,
+    questions,
     turns: nextTurns,
     inferredBackground: uniqueStrings([
       ...state.inferredBackground,
@@ -319,11 +524,7 @@ export function applyOnboardingAnswer(
   });
 
   if (!isComplete || topicBlueprint === null) {
-    return {
-      state: nextState,
-      completed: false,
-      completionSummary: null,
-    };
+    return { state: nextState, completed: false, completionSummary: null };
   }
 
   return {
@@ -332,21 +533,102 @@ export function applyOnboardingAnswer(
     completionSummary: {
       state: nextState,
       topicBlueprint,
-      motivation: getTurnAnswer(nextTurns, 'motivation'),
-      priorAttempts: getTurnAnswer(nextTurns, 'constraints'),
-      dailyConstraint: getTurnAnswer(nextTurns, 'constraints'),
+      motivation: getTurnAnswerByKind(nextTurns, 'motivation'),
+      priorAttempts: getTurnAnswerByKind(nextTurns, 'constraints'),
+      dailyConstraint: getTurnAnswerByKind(nextTurns, 'constraints'),
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+export async function createInitialOnboardingState(
+  input: StartOnboardingInput,
+  generate?: ArchitectGenerator,
+): Promise<ArchitectOnboardingState> {
+  const goal = input.goal.trim();
+  const resolved = resolveGenerator(generate);
+  let firstQuestion = deterministicQuestions(goal)[0] as OnboardingQuestion;
+
+  if (resolved !== null) {
+    try {
+      firstQuestion = await generateFirstQuestion(input, resolved);
+    } catch {
+      firstQuestion = deterministicQuestions(goal)[0] as OnboardingQuestion;
+    }
+  }
+
+  return architectOnboardingStateSchema.parse({
+    onboardingId: input.onboardingId ?? randomUUID(),
+    status: 'awaiting_reply',
+    goal,
+    background: input.background?.trim() || null,
+    preferredDepth: input.preferredDepth ?? 'beginner',
+    questions: [firstQuestion],
+    currentQuestionIndex: 0,
+    currentQuestion: firstQuestion.question,
+    turns: [],
+    inferredBackground:
+      input.background === undefined ? [] : [input.background.trim()].filter(Boolean),
+    detectedStrengths: [],
+    detectedWeakAreas: [],
+    detectedMisconceptions: [],
+    topicBlueprint: null,
+    completedAt: null,
+  });
+}
+
+export async function applyOnboardingAnswer(
+  state: ArchitectOnboardingState,
+  rawAnswer: string,
+  generate?: ArchitectGenerator,
+): Promise<ProgressResult> {
+  const answer = rawAnswer.trim();
+  const question = state.questions[state.currentQuestionIndex];
+
+  if (question === undefined || state.status === 'completed') {
+    return {
+      state,
+      completed: state.status === 'completed',
+      completionSummary:
+        state.status === 'completed'
+          ? {
+              state,
+              topicBlueprint:
+                state.topicBlueprint ??
+                buildTopicBlueprint(state.goal, state.preferredDepth),
+              motivation: getTurnAnswerByKind(state.turns, 'motivation'),
+              priorAttempts: getTurnAnswerByKind(state.turns, 'constraints'),
+              dailyConstraint: getTurnAnswerByKind(state.turns, 'constraints'),
+            }
+          : null,
+    };
+  }
+
+  const resolved = resolveGenerator(generate);
+
+  if (resolved === null) {
+    return applyDeterministicAnswer(state, answer, question);
+  }
+
+  try {
+    return await applyLlmAnswer(state, answer, question, resolved);
+  } catch {
+    return applyDeterministicAnswer(state, answer, question);
+  }
 }
 
 export function buildOnboardingRagSeedPlan(
   state: ArchitectOnboardingState,
 ): PlannedRagSeedEntry[] {
   const plan: PlannedRagSeedEntry[] = [];
-  const motivation = getTurnAnswer(state.turns, 'motivation');
-  const background = getTurnAnswer(state.turns, 'background') ?? state.background;
-  const probe = getTurnAnswer(state.turns, 'probe');
-  const constraints = getTurnAnswer(state.turns, 'constraints');
+  const motivation = getTurnAnswerByKind(state.turns, 'motivation');
+  const background =
+    getTurnAnswerByKind(state.turns, 'background') ?? state.background;
+  const probe = getTurnAnswerByKind(state.turns, 'probe');
+  const constraints = getTurnAnswerByKind(state.turns, 'constraints');
 
   if (motivation !== null) {
     plan.push({

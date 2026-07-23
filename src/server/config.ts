@@ -35,8 +35,10 @@ export const serverConfig = {
   providers: {
     llmApiKey: env.LLM_API_KEY,
     // Model ids are configurable so we can track Gemini's release line without
-    // code changes. Defaults are the current general-availability models.
-    llmModel: env.LLM_MODEL ?? 'gemini-2.5-flash',
+    // code changes. `gemini-flash-latest` is a stable alias that always points
+    // to the current flash GA model, avoiding the "not available to new users"
+    // gating that pinned version ids (e.g. gemini-2.5-flash) can hit.
+    llmModel: env.LLM_MODEL ?? 'gemini-flash-latest',
     embeddingApiKey: env.EMBEDDING_API_KEY,
     embeddingModel: env.EMBEDDING_MODEL ?? 'gemini-embedding-001',
   },

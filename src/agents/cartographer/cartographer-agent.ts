@@ -1,4 +1,5 @@
-import { extractStructured } from '@/lib/llm';
+import { extractStructured, generateStructured } from '@/lib/llm';
+import { serverConfig } from '@/server/config';
 import {
   type FetchedSource,
   type KnowledgeProvenance,
@@ -7,6 +8,17 @@ import {
   type TopicKnowledgeDocument,
 } from '@/schemas/knowledge.schema';
 import type { TopicBriefRecord } from '@/db/topic-briefs.repo';
+import { z } from 'zod';
+
+/** Injectable synthesizer so the LLM path can be exercised in tests. */
+export type CartographerSynthesizer = (input: {
+  label: string;
+  system: string;
+  prompt: string;
+  schema: typeof cartographerSynthesisSchema;
+  temperature: number;
+  maxTokens: number;
+}) => Promise<z.infer<typeof cartographerSynthesisSchema>>;
 
 function slugify(value: string): string {
   return (
@@ -131,7 +143,41 @@ export function discoverCartographerSources(
   );
 }
 
-export async function buildTopicKnowledgeDocument(
+function selectStrongSources(sources: FetchedSource[]): FetchedSource[] {
+  return sources.filter(
+    (source) =>
+      source.sourceType === 'topic_brief' ||
+      source.content.trim().length >= 120,
+  );
+}
+
+function researchQualityFor(
+  count: number,
+): TopicKnowledgeDocument['metadata']['researchQuality'] {
+  return count >= 3 ? 'complete' : count >= 2 ? 'partial' : 'minimal';
+}
+
+function buildSourceInventory(
+  strongSources: FetchedSource[],
+): TopicKnowledgeDocument['sourceInventory'] {
+  return strongSources.map((source) => ({
+    name: source.name,
+    url: source.url,
+    retrievedAt: source.retrievedAt,
+    sourceType: source.sourceType,
+    credibilityTier: source.credibilityTier,
+    credibilitySignal: credibilitySignal(source),
+    relevantSections: source.relevantSections,
+  }));
+}
+
+/**
+ * Deterministic knowledge scaffold. Retained as the offline/test path and as a
+ * resilient fallback when the model synthesis fails, so Cartographer never
+ * crashes the pipeline. It is templated, not researched — the LLM path is what
+ * turns real source text into grounded knowledge.
+ */
+export async function buildDeterministicKnowledgeDocument(
   topicBrief: TopicBriefRecord,
   sources: FetchedSource[],
   failedSources: TopicKnowledgeDocument['metadata']['failedSources'],
@@ -139,11 +185,7 @@ export async function buildTopicKnowledgeDocument(
   return extractStructured({
     label: 'cartographer_topic_knowledge',
     produce: () => {
-      const strongSources = sources.filter(
-        (source) =>
-          source.sourceType === 'topic_brief' ||
-          source.content.trim().length >= 120,
-      );
+      const strongSources = selectStrongSources(sources);
 
       if (strongSources.length === 0) {
         throw new Error(
@@ -166,24 +208,10 @@ export async function buildTopicKnowledgeDocument(
         })),
         (concept) => concept.slug,
       );
-      const sourceInventory = strongSources.map((source) => ({
-        name: source.name,
-        url: source.url,
-        retrievedAt: source.retrievedAt,
-        sourceType: source.sourceType,
-        credibilityTier: source.credibilityTier,
-        credibilitySignal: credibilitySignal(source),
-        relevantSections: source.relevantSections,
-      }));
-      const researchQuality =
-        strongSources.length >= 3
-          ? 'complete'
-          : strongSources.length >= 2
-            ? 'partial'
-            : 'minimal';
+      const researchQuality = researchQualityFor(strongSources.length);
 
       return topicKnowledgeDocumentSchema.parse({
-        sourceInventory,
+        sourceInventory: buildSourceInventory(strongSources),
         conceptMap:
           conceptMap.length > 0
             ? conceptMap
@@ -247,4 +275,274 @@ export async function buildTopicKnowledgeDocument(
       });
     },
   });
+}
+
+// The model returns claims that cite source URLs; provenance is attached
+// deterministically from the fetched set so URLs can never be hallucinated.
+const citedItem = {
+  sourceUrls: z.array(z.string()).default([]),
+};
+
+const cartographerSynthesisSchema = z.object({
+  conceptMap: z
+    .array(
+      z.object({
+        slug: z.string().trim().min(1),
+        title: z.string().trim().min(1),
+        summary: z.string().trim().min(1),
+        prerequisiteSlugs: z.array(z.string().trim().min(1)).default([]),
+        ...citedItem,
+      }),
+    )
+    .min(1),
+  claims: z
+    .array(
+      z.object({
+        claim: z.string().trim().min(1),
+        conceptSlug: z.string().trim().min(1).nullable().default(null),
+        ...citedItem,
+      }),
+    )
+    .default([]),
+  limitations: z
+    .array(
+      z.object({
+        limitation: z.string().trim().min(1),
+        severity: z.enum(['low', 'medium', 'high']).default('medium'),
+        ...citedItem,
+      }),
+    )
+    .default([]),
+  codePatterns: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1),
+        pattern: z.string().trim().min(1),
+        whenToUse: z.string().trim().min(1),
+        ...citedItem,
+      }),
+    )
+    .default([]),
+  interviewPatterns: z
+    .array(
+      z.object({
+        claim: z.string().trim().min(1),
+        conceptSlug: z.string().trim().min(1).nullable().default(null),
+        ...citedItem,
+      }),
+    )
+    .default([]),
+  versionNotes: z
+    .array(
+      z.object({
+        claim: z.string().trim().min(1),
+        conceptSlug: z.string().trim().min(1).nullable().default(null),
+        ...citedItem,
+      }),
+    )
+    .default([]),
+});
+
+function truncate(value: string, max: number): string {
+  const trimmed = value.replace(/\s+/g, ' ').trim();
+
+  return trimmed.length > max ? trimmed.slice(0, max) : trimmed;
+}
+
+function sourceEvidencePack(strongSources: FetchedSource[]): string {
+  return strongSources
+    .map((source, index) => {
+      const body =
+        source.relevantSections.length > 0
+          ? source.relevantSections.join(' ')
+          : sourceExcerpt(source);
+
+      return [
+        `SOURCE ${index + 1}`,
+        `name: ${source.name}`,
+        `url: ${source.url}`,
+        `tier: ${source.credibilityTier}`,
+        `excerpt: ${truncate(body, 1_200)}`,
+      ].join('\n');
+    })
+    .join('\n\n');
+}
+
+const cartographerSystemPrompt = `You are LRNR's Cartographer research agent.
+Synthesize a grounded knowledge base for one learning topic from the supplied sources only.
+
+Rules:
+- Use only the supplied source excerpts for factual claims. Do not invent facts, sources, or URLs.
+- Every concept, claim, limitation, and pattern must cite the exact source URLs (from the SOURCES) that support it in "sourceUrls".
+- Prefer higher-credibility sources. If sources conflict, record it as a limitation.
+- Concept summaries must be substantive and specific to the source material, not generic restatements of the title.
+- Order conceptMap from foundational to advanced.
+- Return one JSON object, no markdown fence.`;
+
+function buildCartographerPrompt(
+  topicBrief: TopicBriefRecord,
+  strongSources: FetchedSource[],
+): string {
+  return `Topic: ${topicBrief.title}
+Goal: ${topicBrief.goal}
+Required depth: ${topicBrief.requiredDepth}
+Prerequisites: ${stringArray(topicBrief.prerequisiteMap).join(', ')}
+Concept outline (starting point, refine against the sources): ${stringArray(topicBrief.conceptOutline).join(', ')}
+
+SOURCES
+${sourceEvidencePack(strongSources)}
+
+Return this JSON shape:
+{
+  "conceptMap": [{ "slug": "kebab-case", "title": "...", "summary": "grounded 1-3 sentences", "prerequisiteSlugs": ["..."], "sourceUrls": ["exact url"] }],
+  "claims": [{ "claim": "...", "conceptSlug": "slug or null", "sourceUrls": ["exact url"] }],
+  "limitations": [{ "limitation": "...", "severity": "low|medium|high", "sourceUrls": ["exact url"] }],
+  "codePatterns": [{ "title": "...", "pattern": "...", "whenToUse": "...", "sourceUrls": ["exact url"] }],
+  "interviewPatterns": [{ "claim": "probing question or pattern", "conceptSlug": "slug or null", "sourceUrls": ["exact url"] }],
+  "versionNotes": [{ "claim": "what changed / version note", "conceptSlug": "slug or null", "sourceUrls": ["exact url"] }]
+}`;
+}
+
+/**
+ * Attaches grounded provenance to a synthesized item. URLs not in the fetched
+ * set are dropped; if nothing valid remains, the primary source backs the item
+ * so the schema's provenance.min(1) invariant always holds.
+ */
+function attachProvenance(
+  sourceUrls: string[],
+  allowed: Map<string, KnowledgeProvenance>,
+  fallback: KnowledgeProvenance,
+): KnowledgeProvenance[] {
+  const matched = sourceUrls
+    .map((url) => allowed.get(url))
+    .filter((entry): entry is KnowledgeProvenance => entry !== undefined);
+
+  return matched.length > 0 ? matched : [fallback];
+}
+
+/**
+ * Real research synthesis: turns the fetched source excerpts into a grounded,
+ * cited knowledge base via the LLM. Citations are constrained to the fetched
+ * source URLs; on any failure it falls back to the deterministic scaffold.
+ */
+export async function synthesizeKnowledgeDocument(
+  topicBrief: TopicBriefRecord,
+  sources: FetchedSource[],
+  failedSources: TopicKnowledgeDocument['metadata']['failedSources'],
+  synthesize: CartographerSynthesizer,
+): Promise<TopicKnowledgeDocument> {
+  const strongSources = selectStrongSources(sources);
+
+  if (strongSources.length === 0) {
+    throw new Error(
+      'Cartographer could not produce knowledge without a usable source.',
+    );
+  }
+
+  const allowed = new Map<string, KnowledgeProvenance>(
+    strongSources.map((source) => [source.url, provenanceFromSource(source)]),
+  );
+  const fallbackProvenance = provenanceFromSource(strongSources[0] as FetchedSource);
+  const synthesis = await synthesize({
+    label: 'cartographer_topic_knowledge',
+    system: cartographerSystemPrompt,
+    prompt: buildCartographerPrompt(topicBrief, strongSources),
+    schema: cartographerSynthesisSchema,
+    temperature: 0.3,
+    maxTokens: 4_500,
+  });
+
+  const conceptMap = uniqueBy(
+    synthesis.conceptMap.map((concept, index) => ({
+      slug: slugify(concept.slug || concept.title),
+      title: truncate(concept.title, 255),
+      summary: truncate(concept.summary, 1_000),
+      prerequisiteSlugs: concept.prerequisiteSlugs.map(slugify),
+      orderingHint: index,
+      provenance: attachProvenance(concept.sourceUrls, allowed, fallbackProvenance),
+    })),
+    (concept) => concept.slug,
+  );
+
+  return topicKnowledgeDocumentSchema.parse({
+    sourceInventory: buildSourceInventory(strongSources),
+    conceptMap,
+    claims: synthesis.claims.map((item) => ({
+      claim: truncate(item.claim, 1_500),
+      conceptSlug: item.conceptSlug,
+      provenance: attachProvenance(item.sourceUrls, allowed, fallbackProvenance),
+    })),
+    limitations: synthesis.limitations.map((item) => ({
+      limitation: truncate(item.limitation, 1_500),
+      severity: item.severity,
+      provenance: attachProvenance(item.sourceUrls, allowed, fallbackProvenance),
+    })),
+    codePatterns: synthesis.codePatterns.map((item) => ({
+      title: truncate(item.title, 255),
+      pattern: truncate(item.pattern, 1_500),
+      whenToUse: truncate(item.whenToUse, 1_000),
+      provenance: attachProvenance(item.sourceUrls, allowed, fallbackProvenance),
+    })),
+    versionNotes: synthesis.versionNotes.map((item) => ({
+      claim: truncate(item.claim, 1_500),
+      conceptSlug: item.conceptSlug,
+      provenance: attachProvenance(item.sourceUrls, allowed, fallbackProvenance),
+    })),
+    interviewPatterns: synthesis.interviewPatterns.map((item) => ({
+      claim: truncate(item.claim, 1_500),
+      conceptSlug: item.conceptSlug,
+      provenance: attachProvenance(item.sourceUrls, allowed, fallbackProvenance),
+    })),
+    metadata: {
+      researchQuality: researchQualityFor(strongSources.length),
+      failedSources,
+      generatedBy: 'cartographer_node',
+    },
+  });
+}
+
+const defaultSynthesizer: CartographerSynthesizer = (input) =>
+  generateStructured(input);
+
+/**
+ * Builds the topic knowledge base. Production synthesizes real research from the
+ * fetched sources via the LLM; tests and offline runs use the deterministic
+ * scaffold. If synthesis fails for any reason, we fall back rather than break
+ * the daily pipeline.
+ */
+export async function buildTopicKnowledgeDocument(
+  topicBrief: TopicBriefRecord,
+  sources: FetchedSource[],
+  failedSources: TopicKnowledgeDocument['metadata']['failedSources'],
+  options: { synthesize?: CartographerSynthesizer | null } = {},
+): Promise<TopicKnowledgeDocument> {
+  const synthesize =
+    options.synthesize === undefined
+      ? serverConfig.nodeEnv === 'test'
+        ? null
+        : defaultSynthesizer
+      : options.synthesize;
+
+  if (synthesize === null) {
+    return buildDeterministicKnowledgeDocument(
+      topicBrief,
+      sources,
+      failedSources,
+    );
+  }
+
+  try {
+    return await synthesizeKnowledgeDocument(
+      topicBrief,
+      sources,
+      failedSources,
+      synthesize,
+    );
+  } catch {
+    return buildDeterministicKnowledgeDocument(
+      topicBrief,
+      sources,
+      failedSources,
+    );
+  }
 }

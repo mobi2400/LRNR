@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   buildTopicKnowledgeDocument,
@@ -65,5 +65,85 @@ describe('cartographer agent', () => {
     );
     expect(document.metadata.researchQuality).toBe('minimal');
     expect(document.metadata.failedSources).toHaveLength(1);
+  });
+
+  it('synthesizes grounded knowledge and constrains citations to fetched sources', async () => {
+    const realUrl = 'https://example.com/agent-guide';
+    const source: FetchedSource = {
+      name: 'Agent guide',
+      url: realUrl,
+      sourceType: 'tutorial',
+      credibilityTier: 'tier_2',
+      isCritical: true,
+      retrievedAt: '2026-01-01T00:00:00.000Z',
+      content:
+        'Agents combine an LLM with tools and a control loop. State carries between steps and evaluation guards output quality across the whole workflow.',
+      relevantSections: [
+        'Agents combine an LLM with tools and a control loop.',
+        'State carries between steps and evaluation guards output.',
+      ],
+    };
+
+    // The synthesizer cites one real URL and one hallucinated URL; only the
+    // real one may survive as provenance.
+    const synthesize = vi.fn().mockResolvedValue({
+      conceptMap: [
+        {
+          slug: 'control-loop',
+          title: 'Agent control loop',
+          summary: 'The loop that lets an LLM call tools and act on results.',
+          prerequisiteSlugs: ['llm-basics'],
+          sourceUrls: [realUrl, 'https://hallucinated.example/fake'],
+        },
+      ],
+      claims: [
+        {
+          claim: 'Evaluation guards output quality across the workflow.',
+          conceptSlug: 'control-loop',
+          sourceUrls: ['https://hallucinated.example/only-fake'],
+        },
+      ],
+      limitations: [],
+      codePatterns: [],
+      interviewPatterns: [],
+      versionNotes: [],
+    });
+
+    const document = await buildTopicKnowledgeDocument(topicBrief, [source], [], {
+      synthesize,
+    });
+
+    expect(synthesize).toHaveBeenCalledTimes(1);
+    // Hallucinated URL dropped, real URL kept.
+    expect(document.conceptMap[0]?.provenance.map((p) => p.sourceUrl)).toEqual([
+      realUrl,
+    ]);
+    // A claim citing only a fake URL falls back to the primary fetched source
+    // rather than dropping provenance below the schema minimum.
+    expect(document.claims[0]?.provenance[0]?.sourceUrl).toBe(realUrl);
+    expect(document.metadata.generatedBy).toBe('cartographer_node');
+  });
+
+  it('falls back to the deterministic scaffold when synthesis throws', async () => {
+    const source: FetchedSource = {
+      name: 'Agent guide',
+      url: 'https://example.com/agent-guide',
+      sourceType: 'tutorial',
+      credibilityTier: 'tier_2',
+      isCritical: true,
+      retrievedAt: '2026-01-01T00:00:00.000Z',
+      content:
+        'Agents combine an LLM with tools and a control loop across multiple steps of work. State carries between steps, and evaluation guards output quality across the whole workflow so mistakes are caught early.',
+      relevantSections: ['Agents combine an LLM with tools and a control loop.'],
+    };
+    const synthesize = vi.fn().mockRejectedValue(new Error('model unavailable'));
+
+    const document = await buildTopicKnowledgeDocument(topicBrief, [source], [], {
+      synthesize,
+    });
+
+    // Deterministic scaffold uses the brief's concept outline (3 concepts).
+    expect(document.conceptMap).toHaveLength(3);
+    expect(document.metadata.generatedBy).toBe('cartographer_node');
   });
 });

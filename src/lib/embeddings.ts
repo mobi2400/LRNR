@@ -5,12 +5,16 @@ import pRetry, { AbortError } from 'p-retry';
 import { z } from 'zod';
 
 import { appLogger } from '@/lib/logger';
+import { serverConfig } from '@/server/config';
 import { incrementMetric, observeMetric } from '@/server/metrics';
 import { assertServerOnly } from '@/utils/server-only';
 
 assertServerOnly('src/lib/embeddings.ts');
 
-export const embeddingModelIdSchema = z.enum(['lrnr-deterministic-1536']);
+export const embeddingModelIdSchema = z.enum([
+  'lrnr-deterministic-1536',
+  'gemini-embedding-1536',
+]);
 
 export const embeddingModelRegistry = {
   'lrnr-deterministic-1536': {
@@ -18,6 +22,17 @@ export const embeddingModelRegistry = {
     provider: 'deterministic-test',
     dimensions: 1536,
     embeddingVersion: 'deterministic-1536-v1',
+    normalizationVersion: 'canonical-text-v1',
+    maxBatchSize: 32,
+    maxConcurrency: 2,
+  },
+  // Real Gemini embeddings, dimension-reduced to 1536 so they drop into the
+  // existing vector(1536) columns without a migration.
+  'gemini-embedding-1536': {
+    model: 'gemini-embedding-1536',
+    provider: 'gemini',
+    dimensions: 1536,
+    embeddingVersion: 'gemini-embedding-001-1536-v1',
     normalizationVersion: 'canonical-text-v1',
     maxBatchSize: 32,
     maxConcurrency: 2,
@@ -88,6 +103,86 @@ export const deterministicEmbeddingProvider: EmbeddingProvider = {
   },
 };
 
+const GEMINI_EMBED_BASE_URL =
+  'https://generativelanguage.googleapis.com/v1beta/models';
+
+const geminiEmbeddingResponseSchema = z.object({
+  embeddings: z.array(z.object({ values: z.array(z.number().finite()) })).min(1),
+});
+
+/**
+ * Real Gemini embeddings via batchEmbedContents. The output is reduced to the
+ * registry dimension so it fits the existing vector columns. A 4xx aborts (bad
+ * key/model); embedTexts owns the retry/timeout budget around this call.
+ */
+export const geminiEmbeddingProvider: EmbeddingProvider = {
+  async embedBatch(input) {
+    const apiModel = serverConfig.providers.embeddingModel;
+    const response = await fetch(
+      `${GEMINI_EMBED_BASE_URL}/${apiModel}:batchEmbedContents`,
+      {
+        method: 'POST',
+        signal: input.signal,
+        headers: {
+          'x-goog-api-key': serverConfig.providers.embeddingApiKey,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          requests: input.texts.map((text) => ({
+            model: `models/${apiModel}`,
+            content: { parts: [{ text }] },
+            outputDimensionality: input.config.dimensions,
+          })),
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const safeBody = (await response.text()).slice(0, 500);
+      const error = new Error(
+        `Gemini embedding request failed (${response.status}): ${safeBody}`,
+      );
+
+      if (response.status < 500) {
+        throw new AbortError(error);
+      }
+
+      throw error;
+    }
+
+    const parsed = geminiEmbeddingResponseSchema.parse(await response.json());
+
+    return parsed.embeddings.map((embedding) => embedding.values);
+  },
+};
+
+/**
+ * Chooses the provider that matches a model config. Callers may still inject a
+ * provider explicitly (tests do), but by default a gemini model uses the real
+ * Gemini API and the deterministic model stays network-free.
+ */
+export function selectEmbeddingProvider(
+  config: EmbeddingModelConfig,
+): EmbeddingProvider {
+  return config.provider === 'gemini'
+    ? geminiEmbeddingProvider
+    : deterministicEmbeddingProvider;
+}
+
+/**
+ * The embedding model the RAG system uses by default. Tests and offline runs
+ * stay deterministic; production uses real Gemini embeddings when configured.
+ */
+export function resolveDefaultEmbeddingModelId(): EmbeddingModelId {
+  if (serverConfig.nodeEnv === 'test') {
+    return 'lrnr-deterministic-1536';
+  }
+
+  return serverConfig.providers.embeddingModel.startsWith('gemini')
+    ? 'gemini-embedding-1536'
+    : 'lrnr-deterministic-1536';
+}
+
 async function withTimeout<T>(timeoutMs: number, operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -121,7 +216,7 @@ export async function embedTexts(input: {
   useCache?: boolean;
 }): Promise<EmbeddingResult[]> {
   const config = embeddingModelRegistry[embeddingModelIdSchema.parse(input.model)];
-  const provider = input.provider ?? deterministicEmbeddingProvider;
+  const provider = input.provider ?? selectEmbeddingProvider(config);
   const timeoutMs = input.timeoutMs ?? 10_000;
   const useCache = input.useCache ?? true;
   const validated = z.array(embeddingInputSchema).max(config.maxBatchSize).parse(input.values);

@@ -1,7 +1,12 @@
 import { z } from 'zod';
 
 import { ragRepository, type RagRetrievalResult } from '@/db/rag.repo';
-import { embeddingModelRegistry, embeddingModelIdSchema, embedTexts } from '@/lib/embeddings';
+import {
+  embeddingModelRegistry,
+  embeddingModelIdSchema,
+  embedTexts,
+  resolveDefaultEmbeddingModelId,
+} from '@/lib/embeddings';
 import { decideRagConfidence, rerankDeterministically, ragConfidenceDecisionSchema } from './rerank';
 
 const ragAgentSchema = z.enum(['architect', 'cartographer', 'curriculum_builder', 'teaching', 'evaluation', 'system']);
@@ -33,7 +38,9 @@ export const ragRetrievalRequestSchema = z.object({
   riskLevel: ragRiskLevelSchema.default('low'),
   retrievalMode: retrievalModeSchema.default('hybrid'),
   filters: ragFiltersSchema.default({ unresolvedOnly: false }),
-  allowedEmbeddingModel: embeddingModelIdSchema.default('lrnr-deterministic-1536'),
+  allowedEmbeddingModel: embeddingModelIdSchema.default(
+    resolveDefaultEmbeddingModelId(),
+  ),
   finalContextItems: z.number().int().positive().max(10).default(ragRetrievalDefaults.finalContextItems),
 });
 

@@ -1,11 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   deterministicEmbeddingProvider,
   embedTexts,
   embeddingModelRegistry,
+  geminiEmbeddingProvider,
   hashEmbeddingContent,
   resetEmbeddingCacheForTests,
+  resolveDefaultEmbeddingModelId,
+  selectEmbeddingProvider,
   validateQueryEmbedding,
   type EmbeddingProvider,
 } from '../../src/lib/embeddings';
@@ -71,5 +74,50 @@ describe('embedding wrapper', () => {
         model: 'lrnr-deterministic-1536',
       }),
     ).toThrow('Embedding dimension mismatch');
+  });
+});
+
+describe('gemini embedding provider', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('selects the gemini provider for gemini models and deterministic otherwise', () => {
+    expect(selectEmbeddingProvider(embeddingModelRegistry['gemini-embedding-1536'])).toBe(
+      geminiEmbeddingProvider,
+    );
+    expect(
+      selectEmbeddingProvider(embeddingModelRegistry['lrnr-deterministic-1536']),
+    ).toBe(deterministicEmbeddingProvider);
+  });
+
+  it('stays deterministic under the test environment default', () => {
+    expect(resolveDefaultEmbeddingModelId()).toBe('lrnr-deterministic-1536');
+  });
+
+  it('calls batchEmbedContents with reduced output dimensionality', async () => {
+    resetEmbeddingCacheForTests();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          embeddings: [{ values: Array.from({ length: 1536 }, () => 0.01) }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const [result] = await embedTexts({
+      model: 'gemini-embedding-1536',
+      values: [{ id: 'q', text: 'agentic retrieval' }],
+      useCache: false,
+    });
+
+    expect(result?.vector).toHaveLength(1536);
+    expect(result?.model).toBe('gemini-embedding-1536');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain(':batchEmbedContents');
+    expect(request.body).toContain('"outputDimensionality":1536');
   });
 });

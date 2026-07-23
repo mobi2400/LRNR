@@ -40,7 +40,7 @@ export async function runInitialCurriculumBuilder(
     'Topic knowledge base not found for initial curriculum planning.',
     { topicSlug },
   );
-  const plan = buildInitialCurriculumPlan({
+  const plan = await buildInitialCurriculumPlan({
     topicBrief,
     knowledgeBase,
     profile,

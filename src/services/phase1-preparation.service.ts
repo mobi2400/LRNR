@@ -180,7 +180,7 @@ export function createPhase1PreparationService(
             );
         }
 
-        const curriculumPlan = buildInitialCurriculumPlan({
+        const curriculumPlan = await buildInitialCurriculumPlan({
           topicBrief,
           knowledgeBase,
           profile,

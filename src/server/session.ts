@@ -6,6 +6,12 @@ import {
   verifyAccessSecret,
 } from '@/server/access-secret';
 import { auth } from '@/server/auth';
+import {
+  createLocalOwnerJwt,
+  getLocalOwnerUserId,
+  LOCAL_JWT_COOKIE_NAME,
+  readLocalOwnerJwt,
+} from '@/server/local-jwt-session';
 import { serverConfig } from '@/server/config';
 import {
   assertAuthenticatedSession,
@@ -30,6 +36,22 @@ const AUTH_COOKIE_NAMES = [
 
 export async function getSessionAccessState(): Promise<SessionAccessState> {
   const [session, cookieStore] = await Promise.all([auth(), cookies()]);
+  const unlockCookie = cookieStore.get(LRNR_UNLOCK_COOKIE_NAME)?.value ?? null;
+  const localJwt = readLocalOwnerJwt(
+    cookieStore.get(LOCAL_JWT_COOKIE_NAME)?.value ?? null,
+  );
+
+  if (localJwt !== null) {
+    return buildSessionAccessState(
+      {
+        userId: localJwt.sub,
+        email: localJwt.email,
+        displayName: localJwt.name,
+        isOwner: localJwt.isOwner,
+      },
+      unlockCookie,
+    );
+  }
 
   return buildSessionAccessState(
     {
@@ -38,8 +60,21 @@ export async function getSessionAccessState(): Promise<SessionAccessState> {
       displayName: session?.user?.name ?? null,
       isOwner: session?.isOwner === true,
     },
-    cookieStore.get(LRNR_UNLOCK_COOKIE_NAME)?.value ?? null,
+    unlockCookie,
   );
+}
+export async function createLocalOwnerSession(): Promise<void> {
+  const cookieStore = await cookies();
+  const jwt = createLocalOwnerJwt();
+
+  cookieStore.set({
+    name: LOCAL_JWT_COOKIE_NAME,
+    value: jwt,
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: false,
+    path: '/',
+  });
 }
 
 export async function unlockOwnerSession(accessSecret: string): Promise<{
@@ -96,6 +131,7 @@ export async function clearSessionCookies(): Promise<void> {
   const cookieStore = await cookies();
 
   cookieStore.delete(LRNR_UNLOCK_COOKIE_NAME);
+  cookieStore.delete(LOCAL_JWT_COOKIE_NAME);
 
   for (const cookieName of AUTH_COOKIE_NAMES) {
     cookieStore.delete(cookieName);
@@ -109,3 +145,6 @@ export {
   buildSessionAccessState,
   SessionAccessError,
 } from '@/server/session-state';
+
+
+

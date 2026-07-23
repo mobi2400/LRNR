@@ -1,4 +1,5 @@
 import { AppError } from '@/server/errors';
+import { serverConfig } from '@/server/config';
 import { assertServerOnly } from '@/utils/server-only';
 import { z } from 'zod';
 
@@ -18,6 +19,7 @@ export const dbActorSchema = z.object({
 });
 
 export type DbActor = z.infer<typeof dbActorSchema>;
+const LOCAL_FALLBACK_OWNER_ID = '00000000-0000-4000-8000-000000000001';
 
 export const topicStatusSchema = z.enum([
   'active',
@@ -84,6 +86,21 @@ export type CurriculumSessionDocument = z.infer<
 >;
 
 export function assertDbActor(actor: DbActor): DbActor {
+  const parsedActor = dbActorSchema.safeParse(actor);
+
+  if (parsedActor.success) {
+    return parsedActor.data;
+  }
+
+  if (serverConfig.nodeEnv !== 'production') {
+    // Local browser sessions can carry stale Auth.js non-UUID ids. Keep the
+    // repository contract UUID-shaped so local UI inspection does not crash.
+    return dbActorSchema.parse({
+      ...actor,
+      userId: LOCAL_FALLBACK_OWNER_ID,
+    });
+  }
+
   return dbActorSchema.parse(actor);
 }
 
@@ -164,3 +181,5 @@ export function matchesMetadataFilters(
     return actualValue === expectedValue;
   });
 }
+
+

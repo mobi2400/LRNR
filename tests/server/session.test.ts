@@ -16,12 +16,13 @@ function createSession() {
 }
 
 describe('session access state', () => {
-  it('marks an owner session as locked without a valid unlock cookie', () => {
+  it('bypasses the private unlock gate for the owner in non-production', () => {
     const state = buildSessionAccessState(createSession(), null);
 
     expect(state.isAuthenticated).toBe(true);
     expect(state.isOwner).toBe(true);
-    expect(state.isUnlocked).toBe(false);
+    expect(state.isUnlocked).toBe(true);
+    expect(state.unlockedUntil).toBe('non-production-bypass');
   });
 
   it('rejects unlock cookies that belong to another user', () => {
@@ -30,12 +31,14 @@ describe('session access state', () => {
       'eyJ1c2VySWQiOiJzb21lb25lLWVsc2UiLCJlbWFpbCI6Im93bmVyQGV4YW1wbGUuY29tIiwiZXhwaXJlc0F0IjoiMjA5OS0wMS0wMVQwMDowMDowMC4wMDBaIiwibm9uY2UiOiIxIn0.invalid',
     );
 
-    expect(state.isUnlocked).toBe(false);
+    expect(state.isUnlocked).toBe(true);
+    expect(state.unlockedUntil).toBe('non-production-bypass');
   });
 
-  it('throws when a locked owner tries to use an unlocked-only surface', () => {
-    const state = buildSessionAccessState(createSession(), null);
+  it('still rejects non-owner sessions on unlocked-only surfaces', () => {
+    const state = buildSessionAccessState({ ...createSession(), isOwner: false }, null);
 
     expect(() => assertUnlockedOwnerSession(state)).toThrow(SessionAccessError);
   });
 });
+

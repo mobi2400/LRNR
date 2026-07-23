@@ -73,7 +73,14 @@ export function buildSessionAccessState(
   unlockCookieValue: string | null,
 ): SessionAccessState {
   const isAuthenticated = session.userId !== null;
-  const unlockedUntil = getMatchingUnlockExpiry(session, unlockCookieValue);
+  const cookieUnlockExpiry = getMatchingUnlockExpiry(session, unlockCookieValue);
+  // Non-production bypass keeps the owner cockpit inspectable while the
+  // private second gate is being tuned. Production still requires the cookie.
+  const developmentUnlockExpiry =
+    serverConfig.nodeEnv !== 'production' && session.isOwner
+      ? 'non-production-bypass'
+      : null;
+  const unlockedUntil = cookieUnlockExpiry ?? developmentUnlockExpiry;
 
   return {
     userId: session.userId,
@@ -133,3 +140,4 @@ export function assertUnlockedOwnerSession(
     );
   }
 }
+

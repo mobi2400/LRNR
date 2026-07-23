@@ -7,12 +7,14 @@ import {
 } from '../../src/db/repository-helpers';
 
 describe('repository helpers', () => {
-  it('rejects actors without a UUID user id', () => {
-    expect(() =>
+  it('normalizes non-production local actors to a stable UUID user id', () => {
+    expect(
       assertDbActor({
         userId: 'owner@example.com',
       }),
-    ).toThrow('Repository access requires a UUID userId.');
+    ).toMatchObject({
+      userId: '00000000-0000-4000-8000-000000000001',
+    });
   });
 
   it('matches nested metadata filters conservatively', () => {
@@ -62,3 +64,4 @@ describe('repository helpers', () => {
     });
   });
 });
+

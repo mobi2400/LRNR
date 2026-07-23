@@ -13,10 +13,18 @@ import { createRagRepository, ragRepository } from '@/db/rag.repo';
 import { RedisKeyValueStore } from '@/lib/redis';
 import { appLogger } from '@/lib/logger';
 import { type DbActor, requireRow } from '@/db/repository-helpers';
+import { z } from 'zod';
+
 import {
   createCompactSessionSummary,
   generateGroundedLessonPayload,
 } from '@/agents/teaching/teaching-agent';
+import {
+  createRagSearchExecutor,
+  ragSearchToolDefinition,
+} from '@/agents/tools/rag-search.tool';
+import { runToolAgent, type LlmToolExecutor } from '@/lib/llm';
+import { serverConfig } from '@/server/config';
 import {
   curriculumSessionSchema,
   type CurriculumSession,
@@ -397,12 +405,89 @@ export async function markLessonComplete(
   return response;
 }
 
+const followUpAnswerSchema = z.object({
+  answer: z.string().trim().min(1),
+  groundedIn: z.array(z.string().trim().min(1)).default([]),
+});
+
+const followUpSystemPrompt = `You are LRNR's Teaching Agent answering a learner's follow-up question about the current lesson.
+
+Rules:
+- Ground your answer in the lesson and in evidence you retrieve with rag_search. Do not invent facts or sources.
+- If the evidence is thin, say what is uncertain rather than guessing.
+- Answer directly and concretely: one clear explanation, one example or tradeoff.
+- Cite in "groundedIn" only source URLs you actually used (lesson sources or rag_search results).
+- Return one JSON object, no markdown fence.`;
+
+export interface FollowUpDependencies {
+  runAgent: typeof runToolAgent;
+  createSearchExecutor: (actor: DbActor, topicSlug?: string) => LlmToolExecutor;
+}
+
+const defaultFollowUpDependencies: FollowUpDependencies = {
+  runAgent: runToolAgent,
+  createSearchExecutor: (actor, topicSlug) =>
+    createRagSearchExecutor(actor, topicSlug === undefined ? {} : { topicSlug }),
+};
+
+/** The lesson-anchored deterministic answer: test/offline path and fallback. */
+function templateFollowUp(
+  lesson: LessonPayload,
+  question: string,
+): FollowUpResponse {
+  return followUpResponseSchema.parse({
+    answer: [
+      `Use the lesson objective as the anchor: ${lesson.objective}`,
+      `For your question, "${question}", start from the mental model: ${lesson.mentalModel}`,
+      'Then answer with one concrete example and one tradeoff before moving on.',
+    ].join(' '),
+    groundedIn: lesson.sourceReferences.map((source) => source.url),
+  });
+}
+
+export async function generateGroundedFollowUp(
+  actor: DbActor,
+  lesson: LessonPayload,
+  question: string,
+  dependencies: FollowUpDependencies,
+): Promise<FollowUpResponse> {
+  const lessonUrls = lesson.sourceReferences.map((source) => source.url);
+  const result = await dependencies.runAgent({
+    label: 'lesson_follow_up',
+    system: followUpSystemPrompt,
+    prompt: `LESSON
+Objective: ${lesson.objective}
+Mental model: ${lesson.mentalModel}
+Lesson sources: ${lessonUrls.join(', ') || '(none)'}
+
+LEARNER QUESTION
+${question}
+
+Use rag_search to gather grounded evidence when helpful, then answer.
+Return { "answer": "...", "groundedIn": ["exact source url", ...] }.`,
+    schema: followUpAnswerSchema,
+    tools: [ragSearchToolDefinition],
+    executeTool: dependencies.createSearchExecutor(
+      actor,
+      lesson.topicSlug,
+    ),
+    temperature: 0.3,
+    maxTokens: 1_200,
+  });
+  // Always keep the validated lesson sources; add any extra URLs the model
+  // actually cited from retrieved evidence.
+  const groundedIn = [...new Set([...result.groundedIn, ...lessonUrls])];
+
+  return followUpResponseSchema.parse({ answer: result.answer, groundedIn });
+}
+
 export async function answerLessonFollowUp(
   actor: DbActor,
   input: {
     sessionId: string;
     question: string;
   },
+  dependencies: FollowUpDependencies = defaultFollowUpDependencies,
 ): Promise<FollowUpResponse> {
   const current = await getCurrentLesson(actor);
   const lesson = current.lesson;
@@ -415,15 +500,21 @@ export async function answerLessonFollowUp(
     });
   }
 
-  const groundedIn = lesson.sourceReferences.map((source) => source.url);
-  const answer = [
-    `Use the lesson objective as the anchor: ${lesson.objective}`,
-    `For your question, "${input.question}", start from the mental model: ${lesson.mentalModel}`,
-    'Then answer with one concrete example and one tradeoff before moving on.',
-  ].join(' ');
+  const useDefaults = dependencies === defaultFollowUpDependencies;
 
-  return followUpResponseSchema.parse({
-    answer,
-    groundedIn,
-  });
+  // Deterministic in test/offline; real tool-grounded answer in production.
+  if (useDefaults && serverConfig.nodeEnv === 'test') {
+    return templateFollowUp(lesson, input.question);
+  }
+
+  try {
+    return await generateGroundedFollowUp(
+      actor,
+      lesson,
+      input.question,
+      dependencies,
+    );
+  } catch {
+    return templateFollowUp(lesson, input.question);
+  }
 }

@@ -7,14 +7,22 @@ import {
 } from '../../src/db/repository-helpers';
 
 describe('repository helpers', () => {
-  it('normalizes non-production local actors to a stable UUID user id', () => {
+  it('accepts a UUID-shaped actor unchanged', () => {
     expect(
       assertDbActor({
-        userId: 'owner@example.com',
+        userId: '00000000-0000-4000-8000-000000000001',
+        requestId: 'req-1',
       }),
     ).toMatchObject({
       userId: '00000000-0000-4000-8000-000000000001',
+      requestId: 'req-1',
     });
+  });
+
+  it('rejects a non-UUID actor instead of silently rewriting it', () => {
+    // A broken session must never be quietly remapped onto another identity's
+    // rows, in any environment.
+    expect(() => assertDbActor({ userId: 'owner@example.com' })).toThrow();
   });
 
   it('matches nested metadata filters conservatively', () => {

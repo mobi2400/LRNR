@@ -3,6 +3,7 @@ import type { JSX } from 'react';
 import { redirect } from 'next/navigation';
 
 import { loginRequestSchema } from '@/schemas/auth.schema';
+import { isOwnerIdentity } from '@/server/owner';
 import { clearSessionCookies, createLocalOwnerSession } from '@/server/session';
 
 type RouteSearchParams = Record<string, string | string[] | undefined>;
@@ -14,7 +15,7 @@ type LoginPageProps = {
 function readMessage(code: string | undefined): string | null {
   switch (code) {
     case 'missing-identifier':
-      return 'Enter any local owner label to create a signed local LRNR session.';
+      return 'Enter your owner email to create a signed local LRNR session.';
     case 'invalid-owner':
       return 'Local owner login could not create a session.';
     case 'owner-only':
@@ -35,6 +36,15 @@ async function loginAction(formData: FormData): Promise<void> {
 
   if (!parsedInput.success) {
     redirect('/login?error=missing-identifier');
+  }
+
+  // Only the configured owner identity may open a session. The identifier is
+  // checked against both OWNER_EMAIL and OWNER_USER_ID so the local JWT can
+  // never be minted for anyone else.
+  const identifier = parsedInput.data.identifier;
+
+  if (!isOwnerIdentity({ userId: identifier, email: identifier })) {
+    redirect('/login?error=owner-only');
   }
 
   await createLocalOwnerSession();
@@ -82,9 +92,9 @@ export default async function LoginPage({
           className="auth-form"
         >
           <label className="auth-field" htmlFor="owner-identifier">
-            <span>Local owner label</span>
+            <span>Owner email</span>
             <small id="login-help">
-              Type anything memorable, for example owner@example.com.
+              Must match the configured OWNER_EMAIL or OWNER_USER_ID.
             </small>
           </label>
           <input

@@ -71,6 +71,20 @@ export async function runInitialCurriculumBuilder(
   return curriculum;
 }
 
+/**
+ * The curriculum-map read model deliberately projects each session down to the
+ * four fields the map renders, so it must be validated against exactly those
+ * fields. Validating the projection against the full session schema always
+ * failed on the omitted fields (dayNumber, phase, masteryObjective, ...) and
+ * broke the whole page.
+ */
+export const curriculumMapSessionProjectionSchema = curriculumSessionSchema.pick({
+  id: true,
+  title: true,
+  status: true,
+  conceptsToCover: true,
+});
+
 export async function getCurriculumMap(
   actor: DbActor,
 ): Promise<CurriculumMapResponse> {
@@ -117,9 +131,7 @@ export async function getCurriculumMap(
           ? null
           : layer1RoadmapSchema.parse(readModel.layer1Roadmap),
       sessions: readModel.sessions.map((session) => {
-        const parsed = curriculumSessionSchema
-          .omit({ lesson: true })
-          .parse(session);
+        const parsed = curriculumMapSessionProjectionSchema.parse(session);
 
         return {
           sessionId: parsed.id,

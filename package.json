@@ -14,15 +14,16 @@
     "typecheck": "tsc --noEmit",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
-    "check:env": "tsx scripts/check-env.ts",
+    "check:env": "tsx --env-file-if-exists=.env.local scripts/check-env.ts",
     "eval:phase1": "vitest run tests/evals/phase1-eval.test.ts",
-    "smoke:phase1": "tsx scripts/smoke-test-phase-1.ts",
-    "deploy:check": "tsx scripts/deployment-readiness-check.ts",
-    "daily:run": "tsx scripts/run-daily-learning.ts",
-    "outbox:process": "tsx scripts/process-delivery-outbox.ts",
+    "smoke:phase1": "tsx --env-file-if-exists=.env.local scripts/smoke-test-phase-1.ts",
+    "deploy:check": "tsx --env-file-if-exists=.env.local scripts/deployment-readiness-check.ts",
+    "daily:run": "tsx --env-file-if-exists=.env.local scripts/run-daily-learning.ts",
+    "outbox:process": "tsx --env-file-if-exists=.env.local scripts/process-delivery-outbox.ts",
+    "rag:backfill": "tsx --env-file-if-exists=.env.local scripts/backfill-rag-embeddings.ts",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
-    "db:migrate": "tsx scripts/migrate.ts",
-    "db:status": "tsx scripts/db-status.ts"
+    "db:migrate": "tsx --env-file-if-exists=.env.local scripts/migrate.ts",
+    "db:status": "tsx --env-file-if-exists=.env.local scripts/db-status.ts"
   },
   "dependencies": {
     "@mobasshirkhan/docguard": "^0.1.1-beta.2",

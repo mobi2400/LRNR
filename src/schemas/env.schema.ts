@@ -7,6 +7,20 @@ const nonEmptyString = (label: string) =>
 
 const optionalSecret = z.string().trim().min(1).optional();
 
+/**
+ * Connection URLs are validated by protocol so a pasted shell command (for
+ * example `redis-cli -u redis://...`) fails here with a clear message instead
+ * of surfacing as an opaque driver stack trace at first use.
+ */
+const connectionUrl = (label: string, protocols: string[]) =>
+  nonEmptyString(label).refine((value) => {
+    try {
+      return protocols.includes(new URL(value).protocol);
+    } catch {
+      return false;
+    }
+  }, `${label} must be a valid ${protocols.join(' or ')} connection URL`);
+
 export const rawEnvSchema = z
   .object({
     NODE_ENV: z
@@ -26,8 +40,8 @@ export const rawEnvSchema = z
     SUPABASE_URL: z.string().trim().url('SUPABASE_URL must be a valid URL'),
     SUPABASE_ANON_KEY: nonEmptyString('SUPABASE_ANON_KEY'),
     SUPABASE_SERVICE_ROLE_KEY: nonEmptyString('SUPABASE_SERVICE_ROLE_KEY'),
-    DATABASE_URL: nonEmptyString('DATABASE_URL'),
-    REDIS_URL: nonEmptyString('REDIS_URL'),
+    DATABASE_URL: connectionUrl('DATABASE_URL', ['postgres:', 'postgresql:']),
+    REDIS_URL: connectionUrl('REDIS_URL', ['redis:', 'rediss:']),
     LLM_API_KEY: nonEmptyString('LLM_API_KEY'),
     LLM_MODEL: z.string().trim().min(1).optional(),
     EMBEDDING_API_KEY: nonEmptyString('EMBEDDING_API_KEY'),

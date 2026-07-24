@@ -11,6 +11,8 @@ import {
 } from '@/server/session';
 import { getCurrentLesson } from '@/services/lesson.service';
 
+import './lesson-modernist.css';
+
 type EmptyLessonCopy = { title: string; body: string };
 
 const defaultEmptyLessonCopy: EmptyLessonCopy = {
@@ -38,6 +40,14 @@ function getEmptyLessonCopy(reason: string | undefined): EmptyLessonCopy {
   return emptyLessonCopy[reason ?? 'not_ready'] ?? defaultEmptyLessonCopy;
 }
 
+function formatTopic(topicSlug: string): string {
+  return topicSlug
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 export default async function CurrentLessonPage(): Promise<JSX.Element> {
   const state = await getSessionAccessState();
 
@@ -55,102 +65,90 @@ export default async function CurrentLessonPage(): Promise<JSX.Element> {
       identity={state.email ?? state.userId}
       unlockExpiresAt={state.unlockedUntil}
     >
-      <section
-        className="cockpit-page lesson-page"
-        aria-labelledby="lesson-title"
-      >
-        <header className="cockpit-page-header lesson-page__header">
+      <div className="lesson-modernist">
+        <header className="m-header">
           <div>
-            <p className="cockpit-kicker">Daily lesson</p>
-            <h1 id="lesson-title">{lesson?.title ?? emptyCopy.title}</h1>
-            <p>{lesson?.objective ?? emptyCopy.body}</p>
+            <p className="m-eyebrow">Daily lesson</p>
+            <p className="m-subtitle text-muted">
+              {lesson === null
+                ? 'No lesson ready'
+                : `${formatTopic(lesson.topicSlug)} · ${lesson.title}`}
+            </p>
           </div>
-          <Link
-            className="workspace-button workspace-button--secondary"
-            href="/lesson/review"
-          >
-            Open review
+          <Link className="btn btn-secondary" href="/lesson/review">
+            Open review →
           </Link>
         </header>
 
         {lesson === null ? (
-          <article className="cockpit-panel empty-state" aria-live="polite">
-            <p className="cockpit-panel__label">Lesson status</p>
+          <div className="lesson-empty" aria-live="polite">
+            <span className="m-pending">Lesson status</span>
             <h2>{emptyCopy.title}</h2>
             <p>{emptyCopy.body}</p>
-            <div className="cockpit-chip-row">
-              <Link className="workspace-button" href="/dashboard">
-                Return to Today
+            <div className="lesson-empty-actions">
+              <Link className="btn btn-primary" href="/dashboard">
+                Return to Today →
               </Link>
-              <Link
-                className="workspace-button workspace-button--secondary"
-                href="/curriculum"
-              >
+              <Link className="btn btn-secondary" href="/curriculum">
                 View learning path
               </Link>
             </div>
-          </article>
+          </div>
         ) : (
-          <div className="lesson-layout">
-            <article className="cockpit-panel reading-card lesson-reading">
-              <p className="cockpit-panel__label">Session context</p>
-              <h2>{lesson.objective}</h2>
+          <div className="lesson-grid">
+            <article className="lesson-article">
+              <h1 className="lesson-headline">{lesson.title}</h1>
+              <p className="lesson-objective">{lesson.objective}</p>
 
-              <section
-                className="mental-model-callout"
-                aria-labelledby="mental-model-title"
-              >
-                <p className="cockpit-panel__label" id="mental-model-title">
+              <section className="lesson-mental" aria-labelledby="mental-title">
+                <div className="lesson-mental-label" id="mental-title">
                   Mental model
-                </p>
+                </div>
                 <p>{lesson.mentalModel}</p>
               </section>
 
-              <div className="lesson-prose" aria-label="Lesson explanation">
-                {lesson.explanation.map((section) => (
-                  <section className="lesson-section" key={section.heading}>
-                    <h3>{section.heading}</h3>
-                    <p>{section.body}</p>
-                  </section>
-                ))}
-              </div>
+              {lesson.explanation.map((section) => (
+                <section className="lesson-section" key={section.heading}>
+                  <h2>{section.heading}</h2>
+                  <p>{section.body}</p>
+                </section>
+              ))}
 
-              <section
-                className="lesson-section"
-                aria-labelledby="diagram-title"
-              >
-                <h3 id="diagram-title">Diagram</h3>
-                <LessonDiagram diagram={lesson.diagram} />
-              </section>
+              <figure className="lesson-figure">
+                <div className="lesson-figure-frame">
+                  <LessonDiagram diagram={lesson.diagram} />
+                </div>
+                <figcaption>
+                  Diagram generated with the lesson and grounded in the same
+                  sources.
+                </figcaption>
+              </figure>
 
               {lesson.codeExamples.length === 0 ? null : (
-                <section
-                  className="lesson-section"
-                  aria-labelledby="code-title"
-                >
-                  <h3 id="code-title">Examples and code</h3>
+                <section className="lesson-section" aria-labelledby="code-title">
+                  <h2 id="code-title">Examples and code</h2>
                   {lesson.codeExamples.map((example) => (
-                    <figure className="lesson-code-block" key={example.title}>
-                      <figcaption>
-                        <strong>{example.title}</strong>
+                    <div key={example.title}>
+                      <div className="lesson-code-head">
+                        <span>{example.title}</span>
                         <span>{example.language}</span>
-                      </figcaption>
+                      </div>
                       <pre className="lesson-code">
                         <code>{example.code}</code>
                       </pre>
-                      <p>{example.explanation}</p>
-                    </figure>
+                      <p className="lesson-code-note">{example.explanation}</p>
+                    </div>
                   ))}
                 </section>
               )}
 
               {lesson.commonMistakes.length === 0 ? null : (
                 <section
-                  className="lesson-section"
+                  className="lesson-mistakes-section"
                   aria-labelledby="mistakes-title"
                 >
-                  <h3 id="mistakes-title">Common mistakes</h3>
-                  <ul className="cockpit-list lesson-mistakes">
+                  <h2 id="mistakes-title">Common mistakes</h2>
+                  <ul className="lesson-mistakes">
                     {lesson.commonMistakes.map((mistake) => (
                       <li key={mistake}>{mistake}</li>
                     ))}
@@ -163,67 +161,70 @@ export default async function CurrentLessonPage(): Promise<JSX.Element> {
               className="lesson-side"
               aria-label="Lesson actions and sources"
             >
-              <article className="cockpit-panel action-card lesson-action-card">
-                <p className="cockpit-panel__label">Before you leave</p>
-                <h2>{lesson.nextAction}</h2>
-                <p>
-                  Marking complete advances the persisted session pointer and
-                  writes the compact lesson summary once.
-                </p>
+              <div className="lesson-side-card">
+                <div className="lesson-side-label">Before you leave</div>
+                <div className="lesson-side-title">{lesson.nextAction}</div>
                 <CompleteLessonButton sessionId={lesson.sessionId} />
-                <Link className="workspace-link" href="/lesson/review">
+                <Link
+                  className="btn btn-secondary btn-block"
+                  href="/lesson/review"
+                  style={{ marginTop: '8px' }}
+                >
                   Review before completing
                 </Link>
-              </article>
+              </div>
 
-              <article className="cockpit-panel source-card">
-                <p className="cockpit-panel__label">Sources</p>
+              <div className="lesson-side-block">
+                <div className="lesson-side-label">Sources</div>
                 {lesson.sourceReferences.length === 0 ? (
-                  <p>
+                  <p className="lesson-source-meta text-muted">
                     No source references were attached to this persisted lesson
                     payload.
                   </p>
                 ) : (
-                  <ul className="source-list">
+                  <ul className="lesson-sources">
                     {lesson.sourceReferences.map((source) => {
                       const isInternal =
                         source.kind === 'internal' ||
                         source.url.startsWith('lrnr://');
-                      const content = (
-                        <>
-                          <span>{source.label}</span>
-                          <small>{source.url}</small>
-                          <em>
-                            {isInternal
-                              ? 'Internal learning context'
-                              : 'External source'}
-                          </em>
-                        </>
-                      );
 
                       return (
                         <li key={`${source.label}-${source.url}`}>
                           {isInternal ? (
-                            <div className="source-list__item">{content}</div>
+                            <div className="lesson-source-name">
+                              {source.label}
+                            </div>
                           ) : (
-                            <a
-                              href={source.url}
-                              rel="noreferrer"
-                              target="_blank"
-                            >
-                              {content}
+                            <a href={source.url} rel="noreferrer" target="_blank">
+                              {source.label}
                             </a>
                           )}
+                          <div className="lesson-source-meta text-muted">
+                            {isInternal
+                              ? 'Internal learning context'
+                              : 'External source'}
+                          </div>
                         </li>
                       );
                     })}
                   </ul>
                 )}
-              </article>
+              </div>
+
+              <div className="lesson-note">
+                <p className="text-muted">
+                  <strong style={{ color: 'var(--color-text)' }}>
+                    Field updates:
+                  </strong>{' '}
+                  the design shows live change alerts here. Scout and News
+                  Intelligence land in Phase 3, so LRNR does not claim a lesson
+                  is out of date until it can actually check.
+                </p>
+              </div>
             </aside>
           </div>
         )}
-      </section>
+      </div>
     </AppShell>
   );
 }

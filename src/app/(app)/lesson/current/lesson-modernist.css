@@ -1,0 +1,289 @@
+/* ==========================================================================
+   Lesson reading page. Implements "LRNR Lesson.dc.html".
+   ========================================================================== */
+
+.lesson-modernist .lesson-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 264px;
+  align-items: start;
+  padding: 0 clamp(20px, 4vw, 44px);
+}
+
+.lesson-modernist .lesson-article {
+  padding: 30px 40px 40px 0;
+  max-width: 760px;
+}
+
+.lesson-modernist .lesson-headline {
+  font-size: clamp(30px, 4vw, 46px);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.lesson-modernist .lesson-objective {
+  font-size: 17px;
+  line-height: 1.6;
+  margin: 16px 0 0;
+  color: var(--color-neutral-800);
+}
+
+/* — mental model callout — */
+.lesson-modernist .lesson-mental {
+  border: 2px solid var(--color-accent);
+  margin-top: 28px;
+  padding: 20px 22px;
+}
+
+.lesson-modernist .lesson-mental-label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-accent-700);
+  font-weight: 800;
+}
+
+.lesson-modernist .lesson-mental p {
+  font-size: 19px;
+  line-height: 1.5;
+  margin: 10px 0 0;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+/* — prose sections — */
+.lesson-modernist .lesson-section {
+  margin-top: 30px;
+}
+
+.lesson-modernist .lesson-section h2 {
+  font-size: 22px;
+  margin: 0;
+}
+
+.lesson-modernist .lesson-section p {
+  font-size: 16.5px;
+  line-height: 1.7;
+  margin: 12px 0 0;
+  color: var(--color-neutral-800);
+}
+
+/* — diagram — */
+.lesson-modernist .lesson-figure {
+  margin: 28px 0 0;
+}
+
+.lesson-modernist .lesson-figure-frame {
+  border: 2px solid var(--color-divider);
+  background: var(--color-neutral-100);
+  padding: 28px;
+  overflow-x: auto;
+}
+
+.lesson-modernist .lesson-figure figcaption {
+  font-size: 11px;
+  margin-top: 8px;
+  color: var(--color-neutral-600);
+}
+
+/* — code — */
+.lesson-modernist .lesson-code-head {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+  margin-top: 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lesson-modernist .lesson-code {
+  overflow-x: auto;
+  background: #1f2520;
+  color: #f3ede0;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 13px;
+  line-height: 1.65;
+  padding: 18px 20px;
+  margin: 8px 0 0;
+  white-space: pre;
+}
+
+.lesson-modernist .lesson-code-note {
+  font-size: 16px;
+  line-height: 1.7;
+  margin: 12px 0 0;
+  color: var(--color-neutral-800);
+}
+
+/* — common mistakes — */
+.lesson-modernist .lesson-mistakes-section {
+  margin-top: 30px;
+  border-top: 2px solid var(--color-divider);
+  padding-top: 20px;
+}
+
+.lesson-modernist .lesson-mistakes-section h2 {
+  font-size: 20px;
+  margin: 0;
+}
+
+.lesson-modernist .lesson-mistakes {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+
+.lesson-modernist .lesson-mistakes li {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: 12px;
+  font-size: 15.5px;
+  line-height: 1.55;
+  color: var(--color-neutral-800);
+}
+
+.lesson-modernist .lesson-mistakes li::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: var(--color-accent);
+  margin-top: 8px;
+}
+
+/* — sidebar — */
+.lesson-modernist .lesson-side {
+  border-left: 2px solid var(--color-divider);
+  padding: 30px 0 0 28px;
+  position: sticky;
+  top: 0;
+  align-self: start;
+}
+
+.lesson-modernist .lesson-side-card {
+  border: 2px solid var(--color-text);
+  padding: 18px 18px 20px;
+}
+
+.lesson-modernist .lesson-side-label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+  font-weight: 800;
+}
+
+.lesson-modernist .lesson-side-title {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 18px;
+  line-height: 1.25;
+  margin-top: 8px;
+}
+
+.lesson-modernist .lesson-side-block {
+  margin-top: 22px;
+}
+
+.lesson-modernist .lesson-sources {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lesson-modernist .lesson-sources li {
+  border-top: 2px solid var(--color-divider);
+  padding: 11px 0;
+}
+
+.lesson-modernist .lesson-sources li + li {
+  border-top-width: 1px;
+}
+
+.lesson-modernist .lesson-sources a,
+.lesson-modernist .lesson-source-name {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 13.5px;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.lesson-modernist .lesson-sources a {
+  color: var(--color-accent-700);
+}
+
+.lesson-modernist .lesson-source-meta {
+  font-size: 11px;
+  margin-top: 3px;
+}
+
+.lesson-modernist .lesson-note {
+  margin-top: 22px;
+  border-top: 2px solid var(--color-divider);
+  padding-top: 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.lesson-modernist .lesson-note::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: var(--color-accent);
+  margin-top: 5px;
+  flex: none;
+}
+
+.lesson-modernist .lesson-note p {
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* — empty state — */
+.lesson-modernist .lesson-empty {
+  padding: 40px clamp(20px, 4vw, 44px) 56px;
+  max-width: 640px;
+}
+
+.lesson-modernist .lesson-empty h2 {
+  font-size: 26px;
+  margin: 12px 0 0;
+}
+
+.lesson-modernist .lesson-empty p {
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 12px 0 0;
+  color: var(--color-neutral-800);
+}
+
+.lesson-modernist .lesson-empty-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+
+@media (max-width: 960px) {
+  .lesson-modernist .lesson-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lesson-modernist .lesson-article {
+    padding-right: 0;
+  }
+
+  .lesson-modernist .lesson-side {
+    border-left: 0;
+    border-top: 2px solid var(--color-divider);
+    padding: 24px 0 0;
+    position: static;
+  }
+}

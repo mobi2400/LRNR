@@ -1,35 +1,50 @@
-﻿import type { JSX } from 'react';
+import type { JSX } from 'react';
 
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 
 import { AppShell } from '@/components/app-shell/AppShell';
-import { buildDashboardViewModel } from '@/components/dashboard/dashboard-view-model';
+import {
+  buildDashboardViewModel,
+  type DashboardMode,
+} from '@/components/dashboard/dashboard-view-model';
 import { OnboardingPanel } from '@/components/onboarding/OnboardingPanel';
 import { PrepareLearningPathButton } from '@/components/onboarding/PrepareLearningPathButton';
 import {
   assertUnlockedOwnerSession,
-  clearSessionCookies,
   getSessionAccessState,
 } from '@/server/session';
 import { dashboardService } from '@/services/dashboard.service';
+import { settingsService } from '@/services/settings.service';
 
-async function logoutAction(): Promise<void> {
-  'use server';
-  await clearSessionCookies();
-  redirect('/login?error=signed-out');
-}
+import './today-modernist.css';
+
+/**
+ * The design's eyebrow reads "Due now — LRNR chose this". That is only true
+ * when a lesson is actually waiting, so each dashboard mode gets its own
+ * honest version of the same line.
+ */
+const EYEBROW_BY_MODE: Record<DashboardMode, string> = {
+  no_goal: 'Start here — tell LRNR your goal',
+  workflow_failed: 'Needs attention',
+  topic_completed: 'Topic complete',
+  lesson_not_ready: 'Preparing your next step',
+  lesson_ready: 'Due now — LRNR chose this',
+};
 
 export default async function DashboardPage(): Promise<JSX.Element> {
   const state = await getSessionAccessState();
   assertUnlockedOwnerSession(state);
 
-  const dashboard = await dashboardService.getDashboard({
-    userId: state.userId,
-    requestId: 'dashboard-page',
-  });
+  const actor = { userId: state.userId, requestId: 'dashboard-page' };
+  const [dashboard, settings] = await Promise.all([
+    dashboardService.getDashboard(actor),
+    settingsService.getSettings(actor),
+  ]);
   const viewModel = buildDashboardViewModel(dashboard);
   const hasLearningPath = viewModel.mode !== 'no_goal';
+  const needsPreparation =
+    viewModel.mode === 'lesson_not_ready' &&
+    dashboard.topic.totalSessionCount === 0;
 
   return (
     <AppShell
@@ -37,155 +52,196 @@ export default async function DashboardPage(): Promise<JSX.Element> {
       identity={state.email ?? state.userId}
       unlockExpiresAt={state.unlockedUntil}
     >
-      <section className="cockpit-page" aria-labelledby="dashboard-title">
-        <header className="cockpit-page-header">
+      <div className="today-modernist">
+        <header className="m-header">
           <div>
-            <p className="cockpit-kicker">Today</p>
-            <h1 id="dashboard-title">
-              {hasLearningPath
-                ? 'Your next useful step is clear.'
-                : 'Build a learning path that starts where you are.'}
-            </h1>
-            <p>
-              {hasLearningPath
-                ? 'LRNR keeps the day focused: one lesson, one review path, and clear background activity.'
-                : 'Tell LRNR your goal once. It will map the first steps before asking you to study.'}
+            <h1 className="m-title">THE LRNR BRIEFING</h1>
+            <p className="m-subtitle text-muted">
+              {viewModel.topicLabel} · {viewModel.progressText}
             </p>
           </div>
-          <form action={logoutAction}>
-            <button
-              className="workspace-button workspace-button--quiet"
-              type="submit"
-            >
-              Sign out
-            </button>
-          </form>
+          <div className="m-statbar" aria-label="Path progress">
+            <div>
+              <div className="m-stat-label text-muted">Progress</div>
+              <div className="m-stat-value">{viewModel.progressPercent}%</div>
+            </div>
+            <div>
+              <div className="m-stat-label text-muted">Sessions</div>
+              <div className="m-stat-value">
+                {dashboard.topic.completedSessionCount}
+                <span className="text-muted" style={{ fontSize: '13px' }}>
+                  /{dashboard.topic.totalSessionCount}
+                </span>
+              </div>
+            </div>
+          </div>
         </header>
 
-        <div className="dashboard-layout">
-          <article
-            className={`cockpit-panel cockpit-panel--primary dashboard-action dashboard-action--${viewModel.mode}`}
-            aria-labelledby="dashboard-primary-title"
-          >
-            <div>
-              <p className="cockpit-panel__label">
-                {hasLearningPath ? 'Up next' : 'First step'}
-              </p>
-              <h2 id="dashboard-primary-title">{viewModel.primaryTitle}</h2>
-              <p>{viewModel.primaryDescription}</p>
-              <div className="cockpit-chip-row">
+        <div className="lrnr-pad">
+          <section className="today-lead">
+            <div className="today-lead-main">
+              <p className="m-eyebrow">{EYEBROW_BY_MODE[viewModel.mode]}</p>
+              <h2 className="today-headline">{viewModel.primaryTitle}</h2>
+              <p className="today-lede">{viewModel.primaryDescription}</p>
+              <div className="today-actions">
                 <Link
-                  className="workspace-button dashboard-continue"
+                  className="btn btn-primary"
                   href={viewModel.primaryActionHref}
                 >
-                  {viewModel.primaryActionLabel}
+                  {viewModel.primaryActionLabel} →
                 </Link>
                 <Link
-                  className="dashboard-inline-link"
+                  className="btn btn-secondary"
                   href={viewModel.secondaryActionHref}
                 >
                   {viewModel.secondaryActionLabel}
                 </Link>
               </div>
-            </div>
-            <div
-              className="dashboard-progress"
-              aria-label={`${viewModel.progressPercent}% of planned sessions complete`}
-            >
-              <span>{viewModel.progressPercent}%</span>
-              <small>complete</small>
-            </div>
-          </article>
-
-          <div
-            className="dashboard-secondary-grid"
-            aria-label="Learning status"
-          >
-            <article className="cockpit-panel progress-card">
-              <p className="cockpit-panel__label">Current path</p>
-              <h2>{viewModel.topicLabel}</h2>
-              <div className="progress-track" aria-hidden="true">
-                <span style={{ width: `${viewModel.progressPercent}%` }} />
+              <div className="today-meta">
+                <div>
+                  <div className="today-meta-label text-muted">Est. time</div>
+                  <div className="today-meta-value">
+                    ~{settings.dailyMinutes} min
+                  </div>
+                </div>
+                <div>
+                  <div className="today-meta-label text-muted">Path</div>
+                  <div className="today-meta-value">{viewModel.topicLabel}</div>
+                </div>
+                <div>
+                  <div className="today-meta-label text-muted">Then next</div>
+                  <div className="today-meta-value">
+                    {viewModel.secondaryActionLabel}
+                  </div>
+                </div>
               </div>
-              <p className="dashboard-metric">{viewModel.progressText}</p>
-              <Link className="workspace-link" href="/curriculum">
-                See the path
-              </Link>
-            </article>
+            </div>
 
-            <article className="cockpit-panel activity-card">
-              <p className="cockpit-panel__label">LRNR activity</p>
-              <h2>{viewModel.activityTitle}</h2>
-              <p>{viewModel.activityDescription}</p>
-              <p className="dashboard-metric">{viewModel.alertSummary}</p>
-            </article>
-          </div>
-
-          <div
-            className="dashboard-secondary-grid"
-            aria-label="Review and trust"
-          >
-            <article className="cockpit-panel trust-card">
-              <p className="cockpit-panel__label">Review</p>
-              <h2>Keep the ideas warm.</h2>
-              <p>
-                Review opens the current lesson questions without pretending to
-                save answers until the API supports persistence.
+            <aside className="today-news" aria-labelledby="today-news-title">
+              <span className="today-news-title" id="today-news-title">
+                What changed in your field
+              </span>
+              <p className="today-news-intro text-muted">
+                Your course is never out of date. Developments are scored against
+                where you are, then folded into the lessons they affect.
               </p>
-              <Link className="workspace-link" href="/lesson/review">
-                Open guided review
-              </Link>
-            </article>
+              <div className="today-news-empty">
+                <span className="m-pending">Phase 3</span>
+                <p
+                  className="today-news-intro text-muted"
+                  style={{ marginTop: '10px' }}
+                >
+                  Field monitoring arrives with the Scout and News Intelligence
+                  agents. Until then LRNR does not surface developments here
+                  rather than showing ones it has not actually checked.
+                </p>
+              </div>
+            </aside>
+          </section>
 
-            <article className="cockpit-panel trust-card">
-              <p className="cockpit-panel__label">Sources</p>
-              <h2>Trust stays attached to lessons.</h2>
-              <p>
-                Source details appear when the persisted lesson payload includes
-                them. LRNR will not invent confidence or citation quality here.
-              </p>
-              <Link className="workspace-link" href="/lesson/current">
-                Inspect lesson sources
+          <hr className="m-rule" />
+
+          <section className="today-territory" aria-labelledby="territory-title">
+            <div className="today-territory-head">
+              <div>
+                <div className="today-section-label" id="territory-title">
+                  Your concept territory
+                </div>
+                <p className="today-section-intro text-muted">
+                  Everything the goal requires, and where you stand on each.
+                  Mastery decays — LRNR watches for the slip and routes you back
+                  before it costs you.
+                </p>
+              </div>
+              <Link className="btn btn-secondary" href="/curriculum">
+                Open full path →
               </Link>
-            </article>
+            </div>
+
+            <div className="today-map-grid">
+              <div className="today-map">
+                <div className="m-empty">
+                  <span className="m-pending">Phase 2</span>
+                  <p className="text-muted">
+                    The concept map is drawn from per-concept mastery, which the
+                    Evaluation agent produces. Your path and sessions are live
+                    today — open the full path to see them.
+                  </p>
+                </div>
+              </div>
+
+              <div className="today-mapstats" aria-label="Concept mastery">
+                <div>
+                  <div className="today-mapstat-value">
+                    {dashboard.topic.completedSessionCount}
+                  </div>
+                  <div className="today-mapstat-label text-muted">
+                    Sessions done
+                  </div>
+                </div>
+                <div>
+                  <div
+                    className="today-mapstat-value"
+                    style={{ color: 'var(--color-neutral-600)' }}
+                  >
+                    —
+                  </div>
+                  <div className="today-mapstat-label text-muted">▲ Weak</div>
+                </div>
+                <div>
+                  <div
+                    className="today-mapstat-value"
+                    style={{ color: 'var(--color-neutral-600)' }}
+                  >
+                    —
+                  </div>
+                  <div className="today-mapstat-label text-muted">
+                    ◷ Decaying
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div className="today-footer">
+            <span className="today-footer-note">{viewModel.alertSummary}</span>
+            <Link className="btn btn-secondary" href="/lesson/review">
+              Open guided review →
+            </Link>
           </div>
 
           {hasLearningPath ? null : (
             <section
-              className="dashboard-onboarding"
+              className="today-onboarding"
               id="build-learning-path"
               aria-labelledby="build-learning-path-title"
             >
-              <div className="section-heading">
-                <p className="cockpit-kicker">Learning path builder</p>
-                <h2 id="build-learning-path-title">
-                  Help LRNR understand your starting point.
-                </h2>
-              </div>
+              <div className="today-section-label">Learning path builder</div>
+              <h2 id="build-learning-path-title">
+                Help LRNR understand your starting point.
+              </h2>
               <OnboardingPanel />
             </section>
           )}
-          {viewModel.mode === 'lesson_not_ready' &&
-          dashboard.topic.totalSessionCount === 0 ? (
+
+          {needsPreparation ? (
             <section
-              className="dashboard-onboarding"
+              className="today-onboarding"
               aria-labelledby="prepare-path-title"
             >
-              <div className="section-heading">
-                <p className="cockpit-kicker">Path preparation</p>
-                <h2 id="prepare-path-title">
-                  Turn your onboarding answers into the first lesson.
-                </h2>
-                <p>
-                  Your answers are saved. LRNR will now research the topic,
-                  build the curriculum, and persist the first lesson.
-                </p>
-              </div>
+              <div className="today-section-label">Path preparation</div>
+              <h2 id="prepare-path-title">
+                Turn your onboarding answers into the first lesson.
+              </h2>
+              <p className="today-section-intro text-muted">
+                Your answers are saved. LRNR will now research the topic, build
+                the curriculum, and persist the first lesson.
+              </p>
               <PrepareLearningPathButton />
             </section>
           ) : null}
         </div>
-      </section>
+      </div>
     </AppShell>
   );
 }

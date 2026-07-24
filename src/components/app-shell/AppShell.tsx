@@ -1,6 +1,9 @@
 import type { JSX, ReactNode } from 'react';
 
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+
+import { clearSessionCookies } from '@/server/session';
 
 export type AppShellRoute =
   | 'dashboard'
@@ -27,6 +30,13 @@ const navigationItems: Array<{
   { href: '/curriculum', label: 'Path', route: 'curriculum' },
   { href: '/settings', label: 'Settings', route: 'settings' },
 ];
+
+async function logoutAction(): Promise<void> {
+  'use server';
+
+  await clearSessionCookies();
+  redirect('/login?error=signed-out');
+}
 
 /**
  * Shared protected shell for LRNR's learner-facing cockpit surfaces.
@@ -84,6 +94,11 @@ export function AppShell({
             {unlockExpiresAt === null ? null : (
               <span className="sr-only">Unlock expires at {unlockExpiresAt}</span>
             )}
+            <form action={logoutAction}>
+              <button className="lrnr-signout" type="submit">
+                Sign out
+              </button>
+            </form>
           </div>
         </aside>
         <main className="lrnr-main" id="main-content" tabIndex={-1}>

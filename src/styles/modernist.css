@@ -460,6 +460,26 @@
   flex: none;
 }
 
+.lrnr-signout {
+  margin-top: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.lrnr-signout:hover {
+  color: var(--color-accent-700);
+}
+
 .lrnr-main {
   min-width: 0;
   padding: 0 0 48px;

@@ -1,0 +1,236 @@
+/* ==========================================================================
+   Today page layout. Implements "LRNR Today.dc.html".
+   Tokens and shared widgets come from src/styles/modernist.css.
+   ========================================================================== */
+
+.today-modernist .today-lead {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(260px, 1fr);
+  align-items: stretch;
+}
+
+.today-modernist .today-lead-main {
+  padding: 28px 32px 30px 0;
+}
+
+.today-modernist .today-headline {
+  font-size: clamp(32px, 4.4vw, 52px);
+  line-height: 1.03;
+  letter-spacing: -0.02em;
+  margin: 16px 0 0;
+  max-width: 16ch;
+}
+
+.today-modernist .today-lede {
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 18px 0 0;
+  max-width: 52ch;
+  color: var(--color-neutral-800);
+}
+
+.today-modernist .today-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 24px;
+}
+
+.today-modernist .today-actions .btn {
+  padding: 12px 20px;
+  font-size: 15px;
+}
+
+.today-modernist .today-meta {
+  display: flex;
+  gap: 22px;
+  margin-top: 26px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-divider);
+  flex-wrap: wrap;
+}
+
+.today-modernist .today-meta-label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.today-modernist .today-meta-value {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 15px;
+  margin-top: 3px;
+}
+
+/* — field news rail — */
+.today-modernist .today-news {
+  border-left: 2px solid var(--color-divider);
+  padding: 28px 0 30px 28px;
+}
+
+.today-modernist .today-news-title {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: var(--color-neutral-700);
+}
+
+.today-modernist .today-news-intro {
+  font-size: 11px;
+  margin: 6px 0 0;
+  line-height: 1.5;
+}
+
+.today-modernist .today-news-empty {
+  border-top: 2px solid var(--color-divider);
+  margin-top: 16px;
+  padding-top: 14px;
+}
+
+/* — concept territory — */
+.today-modernist .today-territory {
+  padding: 26px 0 8px;
+}
+
+.today-modernist .today-territory-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.today-modernist .today-section-label {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: var(--color-neutral-700);
+}
+
+.today-modernist .today-section-intro {
+  font-size: 12.5px;
+  margin: 6px 0 0;
+  max-width: 60ch;
+  line-height: 1.5;
+}
+
+.today-modernist .today-map-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 168px;
+  gap: 24px;
+  align-items: stretch;
+  margin-top: 20px;
+}
+
+.today-modernist .today-map {
+  position: relative;
+  border: 2px solid var(--color-divider);
+  min-height: 288px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background:
+    linear-gradient(
+      0deg,
+      transparent 31px,
+      color-mix(in srgb, var(--color-text) 6%, transparent) 32px
+    ),
+    linear-gradient(
+      90deg,
+      transparent 31px,
+      color-mix(in srgb, var(--color-text) 6%, transparent) 32px
+    );
+  background-size: 32px 32px;
+}
+
+.today-modernist .today-mapstats {
+  display: flex;
+  flex-direction: column;
+  border: 2px solid var(--color-divider);
+}
+
+.today-modernist .today-mapstats > div {
+  padding: 12px 14px;
+}
+
+.today-modernist .today-mapstats > div + div {
+  border-top: 2px solid var(--color-divider);
+}
+
+.today-modernist .today-mapstat-value {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.today-modernist .today-mapstat-label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-top: 3px;
+}
+
+/* — review footer — */
+.today-modernist .today-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  border-top: 2px solid var(--color-divider);
+  margin-top: 26px;
+  padding-top: 16px;
+}
+
+.today-modernist .today-footer-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--color-neutral-800);
+}
+
+.today-modernist .today-footer-note::before {
+  content: '';
+  width: 9px;
+  height: 9px;
+  background: var(--color-accent);
+  display: inline-block;
+  flex: none;
+}
+
+/* — onboarding entry (not in the design, but the only way to start a path) — */
+.today-modernist .today-onboarding {
+  border-top: 2px solid var(--color-text);
+  margin-top: 26px;
+  padding-top: 22px;
+}
+
+.today-modernist .today-onboarding h2 {
+  font-size: 19px;
+  margin: 6px 0 0;
+}
+
+@media (max-width: 860px) {
+  .today-modernist .today-lead {
+    grid-template-columns: 1fr;
+  }
+
+  .today-modernist .today-lead-main {
+    padding-right: 0;
+  }
+
+  .today-modernist .today-news {
+    border-left: 0;
+    border-top: 2px solid var(--color-divider);
+    padding: 22px 0 26px;
+  }
+
+  .today-modernist .today-map-grid {
+    grid-template-columns: 1fr;
+  }
+}

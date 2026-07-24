@@ -331,7 +331,7 @@ async function designSessionsWithModel(
     prompt: buildCurriculumPrompt(concepts, topicBrief, knowledgeBase, profile),
     schema: sessionDesignSchema,
     temperature: 0.3,
-    maxTokens: 4_500,
+    maxTokens: 10_000,
   });
   const bySlug = new Map(
     design.sessions.map((session) => [slugify(session.conceptSlug), session]),

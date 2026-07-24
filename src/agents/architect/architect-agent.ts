@@ -345,7 +345,7 @@ Preferred depth: ${input.preferredDepth ?? 'beginner'}
 Ask the single best opening discovery question. Return { "question": "...", "kind": "motivation|background|probe|constraints" }.`,
     schema: firstQuestionSchema,
     temperature: 0.4,
-    maxTokens: 500,
+    maxTokens: 2_500,
   });
 
   return toQuestion(decision, 0);
@@ -394,7 +394,7 @@ If complete (or this is the final allowed turn), provide the topic blueprint.
 Return JSON: { "inferredBackground": [], "strengths": [], "weakAreas": [], "misconceptions": [], "tags": [], "complete": bool, "nextQuestion": {"question","kind"}|null, "blueprint": {"title","requiredDepth","prerequisiteMap":[],"conceptOutline":[]}|null, "motivation": str|null, "priorAttempts": str|null, "dailyConstraint": str|null }`,
     schema: turnDecisionSchema,
     temperature: 0.35,
-    maxTokens: 1_500,
+    maxTokens: 4_000,
   });
 
   const forcedComplete = nextTurnCount >= MAX_TURNS;

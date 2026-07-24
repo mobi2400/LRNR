@@ -449,7 +449,7 @@ export async function synthesizeKnowledgeDocument(
     prompt: buildCartographerPrompt(topicBrief, strongSources),
     schema: cartographerSynthesisSchema,
     temperature: 0.3,
-    maxTokens: 4_500,
+    maxTokens: 10_000,
   });
 
   const conceptMap = uniqueBy(

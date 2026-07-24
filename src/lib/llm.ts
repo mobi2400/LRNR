@@ -11,6 +11,19 @@ const GEMINI_GENERATE_CONTENT_BASE_URL =
 const DEFAULT_TIMEOUT_MS = 45_000;
 const DEFAULT_MAX_TOOL_ROUNDS = 4;
 
+/**
+ * Current Gemini flash/pro models are "thinking" models: internal reasoning
+ * tokens are billed against maxOutputTokens, and thinking cannot be switched
+ * off (a thinkingBudget of 0 yields an empty candidate). A short prompt still
+ * burns several hundred thinking tokens, so every request needs headroom or the
+ * answer is truncated to nothing. This floor keeps small structured calls safe.
+ */
+const MIN_OUTPUT_TOKENS = 2_048;
+
+function withThinkingHeadroom(maxTokens: number): number {
+  return Math.max(maxTokens, MIN_OUTPUT_TOKENS);
+}
+
 function defaultModel(): string {
   return serverConfig.providers.llmModel;
 }
@@ -89,6 +102,7 @@ const geminiResponseSchema = z.object({
   candidates: z
     .array(
       z.object({
+        finishReason: z.string().optional(),
         content: z
           .object({
             role: z.string().optional(),
@@ -223,6 +237,33 @@ function readParts(parsed: z.infer<typeof geminiResponseSchema>): GeminiPart[] {
 }
 
 /**
+ * Turns an empty candidate into an actionable error. The usual cause is the
+ * thinking budget consuming the whole output allowance, which retrying will not
+ * fix — the caller needs a larger maxTokens.
+ */
+function assertUsableContent(
+  content: string,
+  parsed: z.infer<typeof geminiResponseSchema>,
+  label: string,
+): void {
+  if (content.trim().length > 0) {
+    return;
+  }
+
+  const finishReason = parsed.candidates[0]?.finishReason ?? 'unknown';
+
+  if (finishReason === 'MAX_TOKENS') {
+    throw new Error(
+      `${label} exhausted its output budget on thinking tokens before producing an answer. Raise maxTokens (minimum ${MIN_OUTPUT_TOKENS}).`,
+    );
+  }
+
+  throw new Error(
+    `${label} returned no structured content (finishReason: ${finishReason}).`,
+  );
+}
+
+/**
  * Provider-backed structured generation. The wrapper owns timeout, HTTP error
  * handling, JSON parsing, and Zod validation so agents never trust raw output.
  */
@@ -241,7 +282,7 @@ export async function generateStructured<TOutput>(
       system: input.system,
       contents: [{ role: 'user', parts: [{ text: input.prompt }] }],
       temperature: input.temperature ?? 0.35,
-      maxTokens: input.maxTokens ?? 4_000,
+      maxTokens: withThinkingHeadroom(input.maxTokens ?? 4_000),
       responseJson: true,
       signal: controller.signal,
       fetchImpl: input.fetchImpl ?? fetch,
@@ -251,9 +292,7 @@ export async function generateStructured<TOutput>(
       .map((part) => part.text ?? '')
       .join('');
 
-    if (content.trim().length === 0) {
-      throw new Error(`${input.label} returned no structured content.`);
-    }
+    assertUsableContent(content, parsed, input.label);
 
     return input.schema.parse(parseJsonObject(content, input.label));
   } finally {
@@ -292,7 +331,7 @@ export async function runToolAgent<TOutput>(
         system: input.system,
         contents,
         temperature: input.temperature ?? 0.3,
-        maxTokens: input.maxTokens ?? 4_000,
+        maxTokens: withThinkingHeadroom(input.maxTokens ?? 4_000),
         responseJson: false,
         tools: input.tools,
         signal: controller.signal,
@@ -355,7 +394,7 @@ export async function runToolAgent<TOutput>(
       system: input.system,
       contents: finalContents,
       temperature: input.temperature ?? 0.3,
-      maxTokens: input.maxTokens ?? 4_000,
+      maxTokens: withThinkingHeadroom(input.maxTokens ?? 4_000),
       responseJson: true,
       signal: controller.signal,
       fetchImpl,
@@ -365,9 +404,7 @@ export async function runToolAgent<TOutput>(
       .map((part) => part.text ?? '')
       .join('');
 
-    if (finalContent.trim().length === 0) {
-      throw new Error(`${input.label} returned no final answer.`);
-    }
+    assertUsableContent(finalContent, finalParsed, input.label);
 
     return input.schema.parse(parseJsonObject(finalContent, input.label));
   } finally {

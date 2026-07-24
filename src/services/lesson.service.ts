@@ -472,7 +472,7 @@ Return { "answer": "...", "groundedIn": ["exact source url", ...] }.`,
       lesson.topicSlug,
     ),
     temperature: 0.3,
-    maxTokens: 1_200,
+    maxTokens: 4_000,
   });
   // Always keep the validated lesson sources; add any extra URLs the model
   // actually cited from retrieved evidence.

@@ -185,7 +185,7 @@ export async function generateGroundedLessonPayload(
     prompt: buildGroundedLessonPrompt(input),
     schema: generatedLessonContentSchema,
     temperature: 0.3,
-    maxTokens: 4_500,
+    maxTokens: 10_000,
   });
   const allowedSources = readSourceRefs(input.knowledgeBase, input.session);
   const allowedByUrl = new Map(

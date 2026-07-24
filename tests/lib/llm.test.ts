@@ -42,6 +42,65 @@ describe('Gemini structured generation wrapper', () => {
     expect(request.body).toContain('"responseMimeType":"application/json"');
   });
 
+  it('retries a 429 rate limit instead of aborting immediately', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: { code: 429 } }), { status: 429 }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(modelTurn([{ text: JSON.stringify({ title: 'Recovered' }) }])),
+      );
+
+    const result = await generateStructured({
+      label: 'rate_limited',
+      system: 'Return JSON.',
+      prompt: 'Create one title.',
+      schema: z.object({ title: z.string() }),
+      fetchImpl,
+    });
+
+    expect(result).toEqual({ title: 'Recovered' });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  }, 30_000);
+
+  it('does not retry a non-rate-limit client error', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: 404 } }), { status: 404 }),
+      );
+
+    await expect(
+      generateStructured({
+        label: 'bad_model',
+        system: 'Return JSON.',
+        prompt: 'Create one title.',
+        schema: z.object({ title: z.string() }),
+        fetchImpl,
+      }),
+    ).rejects.toThrow(/404/);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports an exhausted thinking budget as an actionable error', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [] } }],
+      }),
+    );
+
+    await expect(
+      generateStructured({
+        label: 'truncated',
+        system: 'Return JSON.',
+        prompt: 'Create one title.',
+        schema: z.object({ title: z.string() }),
+        fetchImpl,
+      }),
+    ).rejects.toThrow(/Raise maxTokens/i);
+  });
+
   it('strips a markdown JSON fence before parsing', async () => {
     const fetchImpl = vi
       .fn()

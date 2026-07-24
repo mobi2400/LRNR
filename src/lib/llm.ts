@@ -215,9 +215,10 @@ async function callGemini(options: GeminiRequestOptions) {
           `${options.label} provider request failed (${nextResponse.status}): ${safeBody}`,
         );
 
-        // 4xx is a caller error (bad model id, bad key) and will not self-heal,
-        // so we abort instead of burning retries on it.
-        if (nextResponse.status < 500) {
+        // 429 (rate limit) and 5xx are transient and worth retrying with
+        // backoff. Every other 4xx is a caller error (bad model id, bad key)
+        // that will not self-heal, so we abort rather than burn retries on it.
+        if (nextResponse.status !== 429 && nextResponse.status < 500) {
           throw new AbortError(error);
         }
 
@@ -226,7 +227,14 @@ async function callGemini(options: GeminiRequestOptions) {
 
       return nextResponse;
     },
-    { retries: 2 },
+    {
+      retries: 3,
+      // Rate limits need real spacing, not the default sub-second backoff.
+      minTimeout: 2_000,
+      maxTimeout: 20_000,
+      factor: 3,
+      randomize: true,
+    },
   );
 
   return geminiResponseSchema.parse(await response.json());

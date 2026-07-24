@@ -286,9 +286,24 @@ Rules:
 - When done, produce a topic blueprint: the real prerequisite chain and an ordered concept outline for their goal, at the appropriate depth.
 - Return one JSON object, no markdown fence.`;
 
+/**
+ * An adaptive interviewer legitimately invents question kinds we never
+ * enumerated ("assessment", "technical", ...). Rejecting the whole turn over a
+ * label would drop a good question, so unknown kinds fall back to "probe".
+ */
+const lenientQuestionKindSchema = z
+  .string()
+  .transform((value): OnboardingQuestionKind => {
+    const parsed = onboardingQuestionKindSchema.safeParse(
+      value.trim().toLowerCase(),
+    );
+
+    return parsed.success ? parsed.data : 'probe';
+  });
+
 const firstQuestionSchema = z.object({
   question: z.string().trim().min(1).max(2000),
-  kind: onboardingQuestionKindSchema,
+  kind: lenientQuestionKindSchema,
 });
 
 const turnDecisionSchema = z.object({

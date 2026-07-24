@@ -8,7 +8,6 @@ import {
   getSessionAccessState,
 } from '@/server/session';
 
-import './settings-modernist.css';
 
 export default async function SettingsPage(): Promise<JSX.Element> {
   const state = await getSessionAccessState();

@@ -16,7 +16,6 @@ import {
 import { dashboardService } from '@/services/dashboard.service';
 import { settingsService } from '@/services/settings.service';
 
-import './today-modernist.css';
 
 /**
  * The design's eyebrow reads "Due now — LRNR chose this". That is only true

@@ -10,7 +10,6 @@ import {
 } from '@/server/session';
 import { getCurriculumMap } from '@/services/curriculum.service';
 
-import './path-modernist.css';
 
 function formatTopic(topicSlug: string): string {
   return topicSlug

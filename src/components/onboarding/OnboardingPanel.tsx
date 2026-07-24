@@ -9,7 +9,6 @@ import type {
   StartGoalResponse,
 } from '@/schemas/onboarding.schema';
 
-import './onboarding-modernist.css';
 
 /** Starting points offered by the design, as real goal text. */
 const GOAL_PRESETS: Array<{ label: string; sub: string }> = [

@@ -6,7 +6,6 @@ import { loginRequestSchema } from '@/schemas/auth.schema';
 import { isOwnerIdentity } from '@/server/owner';
 import { clearSessionCookies, createLocalOwnerSession } from '@/server/session';
 
-import './login-modernist.css';
 
 type RouteSearchParams = Record<string, string | string[] | undefined>;
 

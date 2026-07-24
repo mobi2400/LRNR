@@ -11,7 +11,6 @@ import {
 } from '@/server/session';
 import { getCurrentLesson } from '@/services/lesson.service';
 
-import './lesson-modernist.css';
 
 type EmptyLessonCopy = { title: string; body: string };
 

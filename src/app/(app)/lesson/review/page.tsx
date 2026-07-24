@@ -10,7 +10,6 @@ import {
 } from '@/server/session';
 import { getCurrentLesson } from '@/services/lesson.service';
 
-import './review-modernist.css';
 
 export default async function LessonReviewPage(): Promise<JSX.Element> {
   const state = await getSessionAccessState();

@@ -44,6 +44,8 @@ export const rawEnvSchema = z
     REDIS_URL: connectionUrl('REDIS_URL', ['redis:', 'rediss:']),
     LLM_API_KEY: nonEmptyString('LLM_API_KEY'),
     LLM_MODEL: z.string().trim().min(1).optional(),
+    LLM_REQUESTS_PER_MINUTE: z.coerce.number().int().positive().max(1000).optional(),
+    LLM_CACHE_TTL_HOURS: z.coerce.number().int().positive().max(720).optional(),
     EMBEDDING_API_KEY: nonEmptyString('EMBEDDING_API_KEY'),
     EMBEDDING_MODEL: z.string().trim().min(1).optional(),
     TELEGRAM_BOT_TOKEN: nonEmptyString('TELEGRAM_BOT_TOKEN'),

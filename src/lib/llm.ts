@@ -1,6 +1,10 @@
 import pRetry, { AbortError } from 'p-retry';
 import { z } from 'zod';
 
+import { buildLlmCacheKey, createRequestBudget } from '@/lib/llm-budget';
+import { appLogger } from '@/lib/logger';
+import { RedisKeyValueStore } from '@/lib/redis';
+import { getCachedJson, setCachedJson } from '@/server/cache';
 import { serverConfig } from '@/server/config';
 import { assertServerOnly } from '@/utils/server-only';
 
@@ -22,6 +26,48 @@ const MIN_OUTPUT_TOKENS = 2_048;
 
 function withThinkingHeadroom(maxTokens: number): number {
   return Math.max(maxTokens, MIN_OUTPUT_TOKENS);
+}
+
+/**
+ * One shared budget per process. Every provider request passes through it, so
+ * tool-loop rounds and retries are paced too, not just top-level agent calls.
+ */
+const requestBudget = createRequestBudget({
+  requestsPerMinute: serverConfig.providers.llmRequestsPerMinute,
+});
+
+const llmCacheStore = new RedisKeyValueStore();
+const cachedCompletionSchema = z.object({ content: z.string().min(1) });
+
+async function readCachedCompletion(key: string): Promise<string | null> {
+  try {
+    const cached = await getCachedJson(
+      llmCacheStore,
+      key,
+      cachedCompletionSchema,
+    );
+
+    return cached?.content ?? null;
+  } catch {
+    // A cache outage must never block generation.
+    return null;
+  }
+}
+
+async function writeCachedCompletion(
+  key: string,
+  content: string,
+): Promise<void> {
+  try {
+    await setCachedJson(
+      llmCacheStore,
+      key,
+      { content },
+      serverConfig.providers.llmCacheTtlMs,
+    );
+  } catch {
+    // Ignored: caching is an optimization, not a correctness requirement.
+  }
 }
 
 function defaultModel(): string {
@@ -170,6 +216,9 @@ interface GeminiRequestOptions {
 async function callGemini(options: GeminiRequestOptions) {
   const response = await pRetry(
     async () => {
+      // Pace every attempt, including retries, against the provider quota.
+      await requestBudget.acquire();
+
       const body: Record<string, unknown> = {
         system_instruction: { parts: [{ text: options.system }] },
         contents: options.contents,
@@ -278,6 +327,28 @@ function assertUsableContent(
 export async function generateStructured<TOutput>(
   input: StructuredGenerationInput<TOutput>,
 ): Promise<TOutput> {
+  const model = input.model ?? defaultModel();
+  const temperature = input.temperature ?? 0.35;
+  const maxTokens = withThinkingHeadroom(input.maxTokens ?? 4_000);
+  const cacheKey = buildLlmCacheKey({
+    model,
+    system: input.system,
+    prompt: input.prompt,
+    temperature,
+    maxTokens,
+  });
+  const cached = await readCachedCompletion(cacheKey);
+
+  if (cached !== null) {
+    try {
+      return input.schema.parse(parseJsonObject(cached, input.label));
+    } catch {
+      // A cached payload that no longer matches the schema (prompt or schema
+      // changed) is simply regenerated below.
+      appLogger.debug('llm.cache_stale', { label: input.label });
+    }
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
@@ -286,11 +357,11 @@ export async function generateStructured<TOutput>(
 
   try {
     const parsed = await callGemini({
-      model: input.model ?? defaultModel(),
+      model,
       system: input.system,
       contents: [{ role: 'user', parts: [{ text: input.prompt }] }],
-      temperature: input.temperature ?? 0.35,
-      maxTokens: withThinkingHeadroom(input.maxTokens ?? 4_000),
+      temperature,
+      maxTokens,
       responseJson: true,
       signal: controller.signal,
       fetchImpl: input.fetchImpl ?? fetch,
@@ -302,7 +373,11 @@ export async function generateStructured<TOutput>(
 
     assertUsableContent(content, parsed, input.label);
 
-    return input.schema.parse(parseJsonObject(content, input.label));
+    const validated = input.schema.parse(parseJsonObject(content, input.label));
+
+    await writeCachedCompletion(cacheKey, content);
+
+    return validated;
   } finally {
     clearTimeout(timeout);
   }

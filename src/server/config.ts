@@ -39,6 +39,11 @@ export const serverConfig = {
     // to the current flash GA model, avoiding the "not available to new users"
     // gating that pinned version ids (e.g. gemini-2.5-flash) can hit.
     llmModel: env.LLM_MODEL ?? 'gemini-flash-latest',
+    // Gemini's free tier allows ~20 generate_content calls per minute. Pacing
+    // below that keeps a full pipeline run from 429-ing into templated output.
+    // Raise this once the project is on a paid tier.
+    llmRequestsPerMinute: env.LLM_REQUESTS_PER_MINUTE ?? 12,
+    llmCacheTtlMs: (env.LLM_CACHE_TTL_HOURS ?? 24) * 60 * 60 * 1000,
     embeddingApiKey: env.EMBEDDING_API_KEY,
     embeddingModel: env.EMBEDDING_MODEL ?? 'gemini-embedding-001',
   },

@@ -1,0 +1,402 @@
+/* ==========================================================================
+   Guided review card flow. Implements "LRNR Review.dc.html".
+   ========================================================================== */
+
+.review-modernist .review-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 264px;
+  align-items: start;
+  padding: 0 clamp(20px, 4vw, 44px);
+}
+
+.review-modernist .review-main {
+  padding: 30px 40px 40px 0;
+  max-width: 760px;
+  min-width: 0;
+}
+
+/* — progress pips — */
+.review-modernist .review-pips {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.review-modernist .review-pip {
+  width: 26px;
+  height: 6px;
+  display: inline-block;
+  background: var(--color-neutral-300);
+}
+
+.review-modernist .review-pip[data-state='current'] {
+  background: var(--color-accent);
+}
+
+.review-modernist .review-pip[data-state='solid'] {
+  background: var(--color-text);
+}
+
+.review-modernist .review-pip[data-state='shaky'],
+.review-modernist .review-pip[data-state='miss'] {
+  background: var(--color-accent);
+}
+
+.review-modernist .review-pip[data-state='skip'] {
+  background: var(--color-neutral-400);
+}
+
+.review-modernist .review-pos {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-left: 4px;
+}
+
+/* — card — */
+.review-modernist .review-card {
+  border: 2px solid var(--color-text);
+}
+
+.review-modernist .review-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 2px solid var(--color-divider);
+  padding: 12px 20px;
+  flex-wrap: wrap;
+}
+
+.review-modernist .review-card-concept {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 13.5px;
+}
+
+.review-modernist .review-card-concept::before {
+  content: '';
+  width: 9px;
+  height: 9px;
+  background: var(--color-accent);
+  display: inline-block;
+  flex: none;
+}
+
+.review-modernist .review-card-meta {
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.review-modernist .review-card-body {
+  padding: 26px 24px 24px;
+}
+
+.review-modernist .review-probe-label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+  font-weight: 800;
+}
+
+.review-modernist .review-question {
+  font-size: clamp(22px, 2.8vw, 30px);
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+  margin: 10px 0 0;
+  max-width: 30ch;
+}
+
+.review-modernist .review-prompt {
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 20px 0 0;
+  max-width: 52ch;
+}
+
+.review-modernist .review-hint {
+  margin-top: 14px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.review-modernist .review-hint summary {
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 12.5px;
+}
+
+.review-modernist .review-hint p {
+  margin: 8px 0 0;
+  color: var(--color-neutral-800);
+}
+
+/* — revealed answer — */
+.review-modernist .review-answer {
+  border-left: 2px solid var(--color-accent);
+  background: var(--color-accent-100);
+  padding: 16px 18px;
+  margin-top: 22px;
+}
+
+.review-modernist .review-answer-label {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-accent-700);
+  font-weight: 800;
+}
+
+.review-modernist .review-answer ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--color-neutral-900);
+}
+
+/* — rating — */
+.review-modernist .review-rate {
+  margin-top: 22px;
+}
+
+.review-modernist .review-rate-label {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+  font-weight: 800;
+}
+
+.review-modernist .review-rate-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.review-modernist .review-rate-btn {
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 14px;
+  padding: 14px;
+  border: 2px solid var(--color-divider);
+  background: var(--color-bg);
+  color: var(--color-text);
+  border-radius: 0;
+}
+
+.review-modernist .review-rate-btn span {
+  display: block;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--color-neutral-600);
+  margin-top: 4px;
+}
+
+.review-modernist .review-rate-btn[data-rating='shaky'] {
+  border-color: var(--color-accent);
+  color: var(--color-accent-700);
+}
+
+.review-modernist .review-rate-btn[data-rating='solid'] {
+  border-color: var(--color-text);
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+.review-modernist .review-rate-btn[data-rating='solid'] span {
+  color: color-mix(in srgb, var(--color-bg) 70%, transparent);
+}
+
+.review-modernist .review-note {
+  font-size: 11.5px;
+  line-height: 1.5;
+  margin: 12px 0 0;
+}
+
+.review-modernist .review-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+/* — finished — */
+.review-modernist .review-done {
+  border: 2px solid var(--color-text);
+  padding: 34px 32px;
+}
+
+.review-modernist .review-done-label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-accent-700);
+  font-weight: 800;
+}
+
+.review-modernist .review-done h2 {
+  font-size: clamp(28px, 3.6vw, 40px);
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  margin: 12px 0 0;
+}
+
+.review-modernist .review-done p {
+  font-size: 16px;
+  line-height: 1.65;
+  margin: 14px 0 0;
+  color: var(--color-neutral-800);
+  max-width: 52ch;
+}
+
+.review-modernist .review-done-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 24px;
+}
+
+/* — sidebar queue — */
+.review-modernist .review-side {
+  border-left: 2px solid var(--color-divider);
+  padding: 30px 0 0 28px;
+  position: sticky;
+  top: 0;
+  align-self: start;
+}
+
+.review-modernist .review-side-label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+  font-weight: 800;
+}
+
+.review-modernist .review-queue {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-modernist .review-queue li {
+  border-top: 2px solid var(--color-divider);
+  padding: 11px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.review-modernist .review-queue-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  flex: none;
+  background: var(--color-neutral-300);
+}
+
+.review-modernist .review-queue li[data-state='current'] .review-queue-dot {
+  background: var(--color-accent);
+}
+
+.review-modernist .review-queue li[data-state='done'] .review-queue-dot {
+  background: var(--color-text);
+}
+
+.review-modernist .review-queue-name {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 13.5px;
+}
+
+.review-modernist .review-queue li[data-state='done'] .review-queue-name {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  color: var(--color-neutral-500);
+}
+
+.review-modernist .review-queue-status {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.review-modernist .review-side-note {
+  margin-top: 22px;
+  border-top: 2px solid var(--color-divider);
+  padding-top: 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.review-modernist .review-side-note::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: var(--color-accent);
+  margin-top: 5px;
+  flex: none;
+}
+
+.review-modernist .review-side-note p {
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* — empty — */
+.review-modernist .review-empty {
+  padding: 40px clamp(20px, 4vw, 44px) 56px;
+  max-width: 640px;
+}
+
+.review-modernist .review-empty h2 {
+  font-size: 26px;
+  margin: 12px 0 0;
+}
+
+.review-modernist .review-empty p {
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 12px 0 0;
+  color: var(--color-neutral-800);
+}
+
+@media (max-width: 960px) {
+  .review-modernist .review-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .review-modernist .review-main {
+    padding-right: 0;
+  }
+
+  .review-modernist .review-side {
+    border-left: 0;
+    border-top: 2px solid var(--color-divider);
+    padding: 24px 0 0;
+    position: static;
+  }
+}
+
+@media (max-width: 620px) {
+  .review-modernist .review-rate-grid {
+    grid-template-columns: 1fr;
+  }
+}

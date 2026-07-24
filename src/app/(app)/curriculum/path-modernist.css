@@ -1,0 +1,295 @@
+/* ==========================================================================
+   Path page. Implements "LRNR Path.dc.html".
+   ========================================================================== */
+
+.path-modernist .path-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  align-items: start;
+  padding: 0 clamp(20px, 4vw, 44px);
+}
+
+.path-modernist .path-main {
+  padding: 26px 32px 40px 0;
+  min-width: 0;
+}
+
+/* — legend — */
+.path-modernist .path-legend {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  font-size: 11.5px;
+  color: var(--color-neutral-700);
+}
+
+.path-modernist .path-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.path-modernist .path-legend span::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  display: inline-block;
+  background: var(--color-bg);
+  border: 2px solid var(--color-divider);
+}
+
+.path-modernist .path-legend span[data-state='done']::before {
+  background: var(--color-text);
+  border-color: var(--color-text);
+}
+
+.path-modernist .path-legend span[data-state='current']::before {
+  border-color: var(--color-accent);
+}
+
+/* — map — */
+.path-modernist .path-map {
+  border: 2px solid var(--color-text);
+  padding: 24px 20px;
+  display: grid;
+  gap: 26px;
+  background:
+    linear-gradient(
+      0deg,
+      transparent 39px,
+      color-mix(in srgb, var(--color-text) 5%, transparent) 40px
+    ),
+    linear-gradient(
+      90deg,
+      transparent 39px,
+      color-mix(in srgb, var(--color-text) 5%, transparent) 40px
+    );
+  background-size: 40px 40px;
+}
+
+.path-modernist .path-band-label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-neutral-500);
+  font-weight: 800;
+}
+
+.path-modernist .path-band-nodes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.path-modernist .path-node {
+  cursor: pointer;
+  white-space: normal;
+  text-align: left;
+  padding: 9px 13px;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 12.5px;
+  border-radius: 0;
+  background: var(--color-bg);
+  border: 2px solid var(--color-divider);
+  color: var(--color-neutral-600);
+  max-width: 260px;
+}
+
+.path-modernist .path-node[data-state='done'] {
+  background: var(--color-text);
+  border-color: var(--color-text);
+  color: var(--color-bg);
+}
+
+.path-modernist .path-node[data-state='current'] {
+  border-color: var(--color-accent);
+  color: var(--color-accent-700);
+}
+
+.path-modernist .path-node[data-state='skipped'] {
+  border-style: dashed;
+  border-color: var(--color-neutral-500);
+  color: var(--color-neutral-700);
+}
+
+.path-modernist .path-node[aria-pressed='true'] {
+  box-shadow: 0 0 0 3px var(--color-accent);
+}
+
+.path-modernist .path-note {
+  font-size: 11.5px;
+  line-height: 1.5;
+  margin: 14px 0 0;
+  max-width: 64ch;
+}
+
+/* — detail sidebar — */
+.path-modernist .path-detail {
+  border-left: 2px solid var(--color-divider);
+  padding: 26px 0 0 28px;
+  position: sticky;
+  top: 0;
+  align-self: start;
+}
+
+.path-modernist .path-detail-card {
+  border: 2px solid var(--color-divider);
+  padding: 20px 20px 22px;
+}
+
+.path-modernist .path-detail-card[data-state='done'] {
+  border-color: var(--color-text);
+}
+
+.path-modernist .path-detail-card[data-state='current'] {
+  border-color: var(--color-accent);
+}
+
+.path-modernist .path-detail-state {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+  font-weight: 800;
+}
+
+.path-modernist .path-detail-state::before {
+  content: '';
+  width: 9px;
+  height: 9px;
+  background: var(--color-neutral-400);
+  display: inline-block;
+  flex: none;
+}
+
+.path-modernist .path-detail-card[data-state='current'] .path-detail-state::before {
+  background: var(--color-accent);
+}
+
+.path-modernist .path-detail-card[data-state='done'] .path-detail-state::before {
+  background: var(--color-text);
+}
+
+.path-modernist .path-detail-title {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 22px;
+  line-height: 1.15;
+  margin: 10px 0 0;
+}
+
+.path-modernist .path-detail-blurb {
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 12px 0 0;
+  color: var(--color-neutral-800);
+}
+
+.path-modernist .path-detail-stats {
+  display: flex;
+  border: 2px solid var(--color-divider);
+  margin-top: 18px;
+}
+
+.path-modernist .path-detail-stats > div {
+  flex: 1;
+  padding: 10px 12px;
+  min-width: 0;
+}
+
+.path-modernist .path-detail-stats > div + div {
+  border-left: 2px solid var(--color-divider);
+}
+
+.path-modernist .path-detail-stat-label {
+  font-size: 9.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.path-modernist .path-detail-stat-value {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 16px;
+  margin-top: 3px;
+  text-transform: capitalize;
+}
+
+.path-modernist .path-detail-locked {
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 16px 0 0;
+}
+
+.path-modernist .path-detail-note {
+  margin-top: 20px;
+  border-top: 2px solid var(--color-divider);
+  padding-top: 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.path-modernist .path-detail-note::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: var(--color-accent);
+  margin-top: 5px;
+  flex: none;
+}
+
+.path-modernist .path-detail-note p {
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* — empty — */
+.path-modernist .path-empty {
+  padding: 40px clamp(20px, 4vw, 44px) 56px;
+  max-width: 640px;
+}
+
+.path-modernist .path-empty h2 {
+  font-size: 26px;
+  margin: 12px 0 0;
+}
+
+.path-modernist .path-empty p {
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 12px 0 0;
+  color: var(--color-neutral-800);
+}
+
+.path-modernist .path-empty-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+
+@media (max-width: 1000px) {
+  .path-modernist .path-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .path-modernist .path-main {
+    padding-right: 0;
+  }
+
+  .path-modernist .path-detail {
+    border-left: 0;
+    border-top: 2px solid var(--color-divider);
+    padding: 24px 0 0;
+    position: static;
+  }
+}

@@ -19,6 +19,7 @@ describe('curriculum map contract', () => {
           sessionId: 'session-1',
           title: 'Day 1: Tool use',
           status: 'ready',
+          phase: 'foundation',
           concepts: ['tool-use'],
         },
       ],
@@ -26,5 +27,8 @@ describe('curriculum map contract', () => {
     });
 
     expect(parsed.sessions[0]?.concepts).toEqual(['tool-use']);
+    // The Path page groups sessions into phase bands, so the map projection
+    // must carry the phase through.
+    expect(parsed.sessions[0]?.phase).toBe('foundation');
   });
 });

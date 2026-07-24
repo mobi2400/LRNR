@@ -82,6 +82,7 @@ export const curriculumMapSessionProjectionSchema = curriculumSessionSchema.pick
   id: true,
   title: true,
   status: true,
+  phase: true,
   conceptsToCover: true,
 });
 
@@ -137,6 +138,7 @@ export async function getCurriculumMap(
           sessionId: parsed.id,
           title: parsed.title,
           status: parsed.status,
+          phase: parsed.phase,
           concepts: parsed.conceptsToCover,
         };
       }),

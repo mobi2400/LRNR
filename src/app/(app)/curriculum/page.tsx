@@ -3,14 +3,17 @@ import type { JSX } from 'react';
 import Link from 'next/link';
 
 import { AppShell } from '@/components/app-shell/AppShell';
+import { PathMap } from '@/components/curriculum/PathMap';
 import {
   assertUnlockedOwnerSession,
   getSessionAccessState,
 } from '@/server/session';
 import { getCurriculumMap } from '@/services/curriculum.service';
 
-function formatStatus(status: string): string {
-  return status
+import './path-modernist.css';
+
+function formatTopic(topicSlug: string): string {
+  return topicSlug
     .split(/[-_\s]+/)
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -29,7 +32,8 @@ export default async function CurriculumPage(): Promise<JSX.Element> {
   const completedCount = curriculum.sessions.filter(
     (session) => session.status === 'completed',
   ).length;
-  const hasCurriculum = curriculum.topicSlug !== null;
+  const hasCurriculum =
+    curriculum.topicSlug !== null && curriculum.sessions.length > 0;
 
   return (
     <AppShell
@@ -37,116 +41,63 @@ export default async function CurriculumPage(): Promise<JSX.Element> {
       identity={state.email ?? state.userId}
       unlockExpiresAt={state.unlockedUntil}
     >
-      <section
-        className="cockpit-page curriculum-page"
-        aria-labelledby="curriculum-title"
-      >
-        <header className="cockpit-page-header">
+      <div className="path-modernist">
+        <header className="m-header">
           <div>
-            <p className="cockpit-kicker">Learning path</p>
-            <h1 id="curriculum-title">
-              {curriculum.roadmap?.title ?? 'No active learning path yet.'}
+            <p className="m-eyebrow">The whole territory</p>
+            <h1 className="m-title">
+              {curriculum.topicSlug === null
+                ? 'YOUR PATH'
+                : `${formatTopic(curriculum.topicSlug)} · YOUR PATH`}
             </h1>
-            <p>
+            <p className="m-subtitle text-muted">
               {curriculum.roadmap?.goal ??
-                'Start from Today to help LRNR build the first path. This page will show ordered sessions once they exist.'}
+                'Not a syllabus — the sessions LRNR planned for this goal'}
             </p>
           </div>
-          <Link className="workspace-button" href="/lesson/current">
-            Current lesson
-          </Link>
+          {hasCurriculum ? (
+            <div className="m-statbar" aria-label="Path progress">
+              <div>
+                <div className="m-stat-label text-muted">Completed</div>
+                <div className="m-stat-value">
+                  {completedCount}
+                  <span className="text-muted" style={{ fontSize: '13px' }}>
+                    /{curriculum.sessions.length}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <div className="m-stat-label text-muted">Depth</div>
+                <div className="m-stat-value" style={{ fontSize: '15px' }}>
+                  {curriculum.roadmap?.requiredDepth ?? '—'}
+                </div>
+              </div>
+            </div>
+          ) : null}
         </header>
 
-        {!hasCurriculum ? (
-          <article className="cockpit-panel empty-state" aria-live="polite">
-            <p className="cockpit-panel__label">Path status</p>
-            <h2>No sessions planned yet.</h2>
-            <p>
-              LRNR needs a learning goal and starting-point answers before it
-              can show a truthful curriculum timeline.
-            </p>
-            <Link
-              className="workspace-button"
-              href="/dashboard#build-learning-path"
-            >
-              Build learning path
-            </Link>
-          </article>
+        {hasCurriculum ? (
+          <PathMap
+            sessions={curriculum.sessions}
+            currentSessionId={curriculum.currentSessionId}
+          />
         ) : (
-          <div className="curriculum-layout">
-            <aside
-              className="cockpit-panel curriculum-summary"
-              aria-label="Path summary"
-            >
-              <p className="cockpit-panel__label">Progress</p>
-              <h2>
-                {completedCount} of {curriculum.sessions.length} sessions
-                complete
-              </h2>
-              <p>
-                Required depth:{' '}
-                <strong>
-                  {curriculum.roadmap?.requiredDepth ?? 'not specified'}
-                </strong>
-              </p>
-              <p>
-                Revision:{' '}
-                <strong>{curriculum.revision ?? 'not available'}</strong>
-              </p>
-              {curriculum.roadmap === null ? null : (
-                <div>
-                  <p className="cockpit-panel__label">Milestones</p>
-                  <ul className="cockpit-list">
-                    {curriculum.roadmap.milestones.map((milestone) => (
-                      <li key={milestone}>{milestone}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </aside>
-
-            <ol className="curriculum-timeline" aria-label="Ordered sessions">
-              {curriculum.sessions.map((session, index) => {
-                const isCurrent =
-                  session.sessionId === curriculum.currentSessionId;
-
-                return (
-                  <li
-                    className={
-                      isCurrent
-                        ? 'curriculum-session curriculum-session--current'
-                        : `curriculum-session curriculum-session--${session.status}`
-                    }
-                    key={session.sessionId}
-                  >
-                    <div
-                      className="curriculum-session__marker"
-                      aria-hidden="true"
-                    >
-                      {index + 1}
-                    </div>
-                    <article className="cockpit-panel curriculum-session__card">
-                      <div>
-                        <p className="cockpit-panel__label">
-                          {isCurrent
-                            ? 'Current session'
-                            : formatStatus(session.status)}
-                        </p>
-                        <h2>{session.title}</h2>
-                      </div>
-                      <ul className="concept-chip-list" aria-label="Concepts">
-                        {session.concepts.map((concept) => (
-                          <li key={concept}>{concept}</li>
-                        ))}
-                      </ul>
-                    </article>
-                  </li>
-                );
-              })}
-            </ol>
+          <div className="path-empty" aria-live="polite">
+            <span className="m-pending">Path status</span>
+            <h2>No path has been planned yet.</h2>
+            <p>
+              LRNR builds the path after it understands your goal and researches
+              the topic. Start from Today and it will map the sessions before
+              asking you to study.
+            </p>
+            <div className="path-empty-actions">
+              <Link className="btn btn-primary" href="/dashboard">
+                Return to Today →
+              </Link>
+            </div>
           </div>
         )}
-      </section>
+      </div>
     </AppShell>
   );
 }

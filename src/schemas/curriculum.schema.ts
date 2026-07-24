@@ -56,6 +56,7 @@ export const curriculumMapResponseSchema = z.object({
       sessionId: z.string().trim().min(1),
       title: z.string().trim().min(1),
       status: z.string().trim().min(1),
+      phase: curriculumPhaseSchema,
       concepts: z.array(z.string().trim().min(1)),
     }),
   ),

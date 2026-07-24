@@ -14,6 +14,7 @@ const projectedSession = {
   id: '2dc7c214-64ff-46de-9869-986f9bd7f3b5',
   title: 'Day 2: core workflow',
   status: 'ready',
+  phase: 'core',
   conceptsToCover: ['core-workflow'],
 };
 

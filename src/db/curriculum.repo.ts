@@ -252,6 +252,7 @@ export function createCurriculumRepository(database: DbClient = db) {
                 'id', session_item->>'id',
                 'title', session_item->>'title',
                 'status', session_item->>'status',
+                'phase', session_item->>'phase',
                 'conceptsToCover', coalesce(session_item->'conceptsToCover', '[]'::jsonb)
               )
               order by ordinal

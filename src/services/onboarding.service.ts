@@ -134,6 +134,9 @@ export function buildOnboardingCompletionPlan(
         weakAreas: progress.state.detectedWeakAreas,
         motivation: progress.completionSummary.motivation,
         priorAttempts: progress.completionSummary.priorAttempts,
+        // Cartographer fetches these; unreachable URLs fail closed and are
+        // recorded as failed sources rather than becoming evidence.
+        recommendedSources: progress.completionSummary.recommendedSources,
       },
       prerequisiteMap: progress.completionSummary.topicBlueprint.prerequisiteMap,
       conceptOutline: progress.completionSummary.topicBlueprint.conceptOutline,
@@ -212,8 +215,28 @@ export function createOnboardingService() {
         limit: 1,
       });
 
-      if (current[0]?.output !== null && current[0]?.output !== undefined) {
-        const existingState = parseStateFromJob(current[0].output);
+      const inFlight = current[0];
+      const inFlightState =
+        inFlight?.output === null || inFlight?.output === undefined
+          ? null
+          : parseStateFromJob(inFlight.output);
+
+      // Resuming only makes sense for the same goal. A different goal used to
+      // silently return the older interview, so the learner answered questions
+      // about a topic they had already moved on from. Supersede it instead.
+      if (
+        inFlight !== undefined &&
+        inFlightState !== null &&
+        inFlightState.goal !== validatedInput.goal
+      ) {
+        await jobsRepository.updateStatus(actor, inFlight.id, {
+          status: 'cancelled',
+          finishedAt: new Date(),
+        });
+      }
+
+      if (inFlightState !== null && inFlightState.goal === validatedInput.goal) {
+        const existingState = inFlightState;
         const existingEnvelope = {
           ok: true as const,
           requestId: actor.requestId ?? 'replayed-request',

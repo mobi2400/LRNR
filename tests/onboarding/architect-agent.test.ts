@@ -126,4 +126,79 @@ describe('architect onboarding agent', () => {
       'agentic-ai-foundations',
     );
   });
+
+  it('requests a blueprint explicitly when the turn completes without one', async () => {
+    const generate = vi
+      .fn()
+      .mockResolvedValueOnce({ question: 'Where are you starting from?', kind: 'motivation' })
+      // Completes, but supplies no blueprint - previously this silently fell
+      // back to the generic deterministic template and lost the interview.
+      .mockResolvedValueOnce({
+        inferredBackground: [],
+        strengths: [],
+        weakAreas: ['Lifetimes in structs'],
+        misconceptions: [],
+        tags: [],
+        complete: true,
+        nextQuestion: null,
+        blueprint: null,
+        motivation: null,
+        priorAttempts: null,
+        dailyConstraint: null,
+      })
+      // The dedicated blueprint pass then grounds it in the conversation.
+      .mockResolvedValueOnce({
+        title: 'Rust Ownership and Borrowing',
+        requiredDepth: 'intermediate',
+        prerequisiteMap: ['rust syntax basics'],
+        conceptOutline: ['ownership', 'borrowing', 'lifetimes'],
+        recommendedSources: ['https://doc.rust-lang.org/book/ch04-00-understanding-ownership.html'],
+      });
+
+    const state = await createInitialOnboardingState(
+      { goal: 'I want to learn rust ownership', preferredDepth: 'intermediate' },
+      generate as unknown as ArchitectGenerator,
+    );
+    const progress = await applyOnboardingAnswer(
+      state,
+      'I keep fighting the borrow checker.',
+      generate as unknown as ArchitectGenerator,
+    );
+
+    expect(progress.completed).toBe(true);
+    expect(generate).toHaveBeenCalledTimes(3);
+    expect(progress.state.topicBlueprint?.title).toBe('Rust Ownership and Borrowing');
+    expect(progress.state.topicBlueprint?.topicSlug).toBe('rust-ownership-and-borrowing');
+    expect(progress.state.topicBlueprint?.conceptOutline).toContain('lifetimes');
+    // Architect-proposed sources reach the Cartographer for real research.
+    expect(progress.completionSummary?.recommendedSources).toContain(
+      'https://doc.rust-lang.org/book/ch04-00-understanding-ownership.html',
+    );
+  });
+
+  it('falls back to the deterministic blueprint when the blueprint pass fails', async () => {
+    const generate = vi
+      .fn()
+      .mockResolvedValueOnce({ question: 'Where are you starting from?', kind: 'motivation' })
+      .mockResolvedValueOnce({
+        inferredBackground: [], strengths: [], weakAreas: [], misconceptions: [], tags: [],
+        complete: true, nextQuestion: null, blueprint: null,
+        motivation: null, priorAttempts: null, dailyConstraint: null,
+      })
+      .mockRejectedValueOnce(new Error('model unavailable'));
+
+    const state = await createInitialOnboardingState(
+      { goal: 'I want to learn agentic ai', preferredDepth: 'intermediate' },
+      generate as unknown as ArchitectGenerator,
+    );
+    const progress = await applyOnboardingAnswer(
+      state,
+      'Some answer.',
+      generate as unknown as ArchitectGenerator,
+    );
+
+    expect(progress.completed).toBe(true);
+    expect(progress.state.topicBlueprint).not.toBeNull();
+    expect(progress.completionSummary?.recommendedSources).toEqual([]);
+  });
 });

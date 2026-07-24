@@ -21,8 +21,17 @@ export type DbClient = PostgresJsDatabase<typeof schema>;
 
 function createSqlClient() {
   return postgres(serverConfig.database.url, {
-    max: 1,
+    // Supabase's transaction pooler (pgbouncer) cannot use prepared statements.
     prepare: false,
+    // A single connection serialized every request behind whichever one was
+    // slowest, so one stalled agent call blocked the whole app. A small pool
+    // keeps independent requests independent.
+    max: 5,
+    // Recycle idle connections: the pooler drops them server-side, and a stale
+    // socket otherwise surfaces as a request that hangs instead of failing.
+    idle_timeout: 20,
+    max_lifetime: 60 * 30,
+    connect_timeout: 15,
   });
 }
 

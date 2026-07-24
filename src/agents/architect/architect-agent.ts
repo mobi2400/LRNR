@@ -30,6 +30,12 @@ export interface CompletionSummary {
   motivation: string | null;
   priorAttempts: string | null;
   dailyConstraint: string | null;
+  /**
+   * Authoritative source URLs the Architect proposes for this topic. The
+   * Cartographer fetches them, so unreachable or invented URLs simply fail and
+   * are recorded as failed sources rather than becoming evidence.
+   */
+  recommendedSources: string[];
 }
 
 export interface ProgressResult {
@@ -351,6 +357,54 @@ Ask the single best opening discovery question. Return { "question": "...", "kin
   return toQuestion(decision, 0);
 }
 
+const blueprintSchema = z.object({
+  title: z.string().trim().min(1),
+  requiredDepth: preferredDepthSchema,
+  prerequisiteMap: z.array(z.string().trim().min(1)).min(1),
+  conceptOutline: z.array(z.string().trim().min(1)).min(3),
+  recommendedSources: z.array(z.string().trim().min(1)).default([]),
+});
+
+/**
+ * A dedicated blueprint pass. The turn model often signals completion without
+ * filling in the blueprint, and falling straight back to the generic template
+ * threw away everything the interview just learned. Asking once, explicitly,
+ * with the full transcript keeps the roadmap grounded in the real conversation.
+ */
+async function generateBlueprint(
+  state: ArchitectOnboardingState,
+  turns: OnboardingTurn[],
+  generate: <TOutput>(input: StructuredGenerationInput<TOutput>) => Promise<TOutput>,
+): Promise<z.infer<typeof blueprintSchema>> {
+  return generate({
+    label: 'architect_blueprint',
+    system: architectSystemPrompt,
+    prompt: `Design the topic blueprint for this learner from the completed discovery interview.
+
+Stated goal: ${state.goal}
+Preferred depth: ${state.preferredDepth}
+Detected strengths: ${state.detectedStrengths.join('; ') || '(none)'}
+Detected weak areas: ${state.detectedWeakAreas.join('; ') || '(none)'}
+Detected misconceptions: ${state.detectedMisconceptions.join('; ') || '(none)'}
+
+Interview transcript:
+${turns.map((turn, index) => `Q${index + 1} [${turn.questionKind}]: ${turn.question}\nA${index + 1}: ${turn.answer}`).join('\n')}
+
+Base the blueprint on what the learner actually needs, which may be narrower or
+different from how they phrased the goal. Return JSON:
+{
+  "title": "clean topic name, no filler words like 'I want to learn'",
+  "requiredDepth": "beginner|intermediate|advanced|expert",
+  "prerequisiteMap": ["real prerequisite", ...],
+  "conceptOutline": ["ordered concept", ...at least 3],
+  "recommendedSources": ["https://authoritative-doc-url", ...]
+}`,
+    schema: blueprintSchema,
+    temperature: 0.3,
+    maxTokens: 4_000,
+  });
+}
+
 function blueprintFromDecision(
   state: ArchitectOnboardingState,
   decision: z.infer<typeof turnDecisionSchema>,
@@ -415,19 +469,7 @@ Return JSON: { "inferredBackground": [], "strengths": [], "weakAreas": [], "misc
       : toQuestion(decision.nextQuestion, state.questions.length);
   const questions =
     nextQuestion === null ? state.questions : [...state.questions, nextQuestion];
-  const topicBlueprint = isComplete
-    ? blueprintFromDecision(state, decision)
-    : null;
-
-  const nextState = architectOnboardingStateSchema.parse({
-    ...state,
-    status: isComplete ? 'completed' : 'awaiting_reply',
-    currentQuestionIndex: isComplete
-      ? state.currentQuestionIndex
-      : questions.length - 1,
-    currentQuestion: nextQuestion?.question ?? null,
-    questions,
-    turns: nextTurns,
+  const mergedSignals = {
     inferredBackground: uniqueStrings([
       ...state.inferredBackground,
       ...decision.inferredBackground,
@@ -444,6 +486,47 @@ Return JSON: { "inferredBackground": [], "strengths": [], "weakAreas": [], "misc
       ...state.detectedMisconceptions,
       ...decision.misconceptions,
     ]),
+  };
+  let topicBlueprint: OnboardingTopicBlueprint | null = null;
+  let recommendedSources: string[] = [];
+
+  if (isComplete) {
+    if (decision.blueprint !== null) {
+      topicBlueprint = blueprintFromDecision(state, decision);
+    } else {
+      // The turn model signalled completion without a blueprint. Ask for one
+      // explicitly rather than discarding the interview for a generic template.
+      try {
+        const generated = await generateBlueprint(
+          { ...state, ...mergedSignals },
+          nextTurns,
+          generate,
+        );
+
+        topicBlueprint = onboardingTopicBlueprintSchema.parse({
+          topicSlug: toSlug(generated.title) || toSlug(state.goal),
+          title: generated.title.slice(0, 255),
+          requiredDepth: generated.requiredDepth,
+          prerequisiteMap: cap(generated.prerequisiteMap, 12),
+          conceptOutline: cap(generated.conceptOutline, 16),
+        });
+        recommendedSources = generated.recommendedSources.slice(0, 8);
+      } catch {
+        topicBlueprint = buildTopicBlueprint(state.goal, state.preferredDepth);
+      }
+    }
+  }
+
+  const nextState = architectOnboardingStateSchema.parse({
+    ...state,
+    status: isComplete ? 'completed' : 'awaiting_reply',
+    currentQuestionIndex: isComplete
+      ? state.currentQuestionIndex
+      : questions.length - 1,
+    currentQuestion: nextQuestion?.question ?? null,
+    questions,
+    turns: nextTurns,
+    ...mergedSignals,
     topicBlueprint,
     completedAt: isComplete ? new Date().toISOString() : null,
   });
@@ -464,6 +547,7 @@ Return JSON: { "inferredBackground": [], "strengths": [], "weakAreas": [], "misc
         decision.priorAttempts ?? getTurnAnswerByKind(nextTurns, 'constraints'),
       dailyConstraint:
         decision.dailyConstraint ?? getTurnAnswerByKind(nextTurns, 'constraints'),
+      recommendedSources,
     },
   };
 }
@@ -538,6 +622,7 @@ function applyDeterministicAnswer(
       motivation: getTurnAnswerByKind(nextTurns, 'motivation'),
       priorAttempts: getTurnAnswerByKind(nextTurns, 'constraints'),
       dailyConstraint: getTurnAnswerByKind(nextTurns, 'constraints'),
+      recommendedSources: [],
     },
   };
 }
@@ -604,6 +689,7 @@ export async function applyOnboardingAnswer(
               motivation: getTurnAnswerByKind(state.turns, 'motivation'),
               priorAttempts: getTurnAnswerByKind(state.turns, 'constraints'),
               dailyConstraint: getTurnAnswerByKind(state.turns, 'constraints'),
+              recommendedSources: [],
             }
           : null,
     };

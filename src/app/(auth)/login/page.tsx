@@ -6,6 +6,8 @@ import { loginRequestSchema } from '@/schemas/auth.schema';
 import { isOwnerIdentity } from '@/server/owner';
 import { clearSessionCookies, createLocalOwnerSession } from '@/server/session';
 
+import './login-modernist.css';
+
 type RouteSearchParams = Record<string, string | string[] | undefined>;
 
 type LoginPageProps = {
@@ -19,7 +21,7 @@ function readMessage(code: string | undefined): string | null {
     case 'invalid-owner':
       return 'Local owner login could not create a session.';
     case 'owner-only':
-      return 'This workspace only accepts the configured owner account.';
+      return 'That identity is not the configured owner of this workspace.';
     case 'signed-out':
       return 'Local session was cleared. Sign in again when ready.';
     default:
@@ -71,54 +73,131 @@ export default async function LoginPage({
   const hasMessage = message !== null;
 
   return (
-    <main className="auth-shell">
-      <section className="auth-card" aria-labelledby="login-title">
-        <p className="auth-eyebrow">Local owner login</p>
-        <h1 id="login-title">Open the local LRNR workspace.</h1>
-        <p className="auth-copy">
-          Use this temporary local JWT login while checking the Phase 1 cockpit.
-          It creates a signed local session with the configured owner UUID.
-        </p>
-        {hasMessage ? (
-          <p className="auth-alert" id="login-feedback" role="alert">
-            {message}
-          </p>
-        ) : null}
-        <form
-          action={loginAction}
-          aria-describedby={
-            hasMessage ? 'login-feedback login-help' : 'login-help'
-          }
-          className="auth-form"
-        >
-          <label className="auth-field" htmlFor="owner-identifier">
-            <span>Owner email</span>
-            <small id="login-help">
-              Must match the configured OWNER_EMAIL or OWNER_USER_ID.
-            </small>
-          </label>
-          <input
-            autoComplete="username"
-            className="auth-input"
-            id="owner-identifier"
-            name="identifier"
-            placeholder="owner@example.com"
-            type="text"
-          />
-          <button className="auth-button" type="submit">
-            Sign in locally
-          </button>
-        </form>
-        <form action={resetLocalSessionAction} className="auth-form">
-          <button className="auth-link" type="submit">
-            Reset local session cookies
-          </button>
-        </form>
-        <p className="auth-footnote">
-          This local JWT flow is disabled in production. The reset button clears
-          stale Auth.js/local cookies when the browser keeps redirecting.
-        </p>
-      </section>
-    </main>
+    <div className="lrnr-modernist">
+      <main className="login-modernist">
+        <section className="lg-poster">
+          <div className="lg-brand">
+            <span>LRNR</span>
+          </div>
+
+          <div>
+            <div className="lg-kicker">Your personal AI university</div>
+            <h1 className="lg-headline">
+              The course that never goes out of date.
+            </h1>
+            <p className="lg-lede">
+              Because it isn&apos;t a course. One private workspace, one owner,
+              one living path to mastery.
+            </p>
+          </div>
+
+          {/* The design shows the owner's streak and mastery counts here.
+              Nothing is known before sign-in, so this states what LRNR is
+              instead of inventing numbers. */}
+          <div className="lg-facts">
+            <div>
+              <div className="lg-fact-title">Mastery</div>
+              <div className="lg-fact-note">Not completion</div>
+            </div>
+            <div>
+              <div className="lg-fact-title">Grounded</div>
+              <div className="lg-fact-note">Cited sources</div>
+            </div>
+            <div>
+              <div className="lg-fact-title">Single owner</div>
+              <div className="lg-fact-note">Your database</div>
+            </div>
+          </div>
+        </section>
+
+        <section className="lg-panel">
+          <div className="lg-panel-inner">
+            <p className="m-eyebrow">Private workspace</p>
+            <h2 className="lg-title">Welcome back.</h2>
+            <p className="lg-sub text-muted">
+              This install belongs to one owner. Sign in to pick up where LRNR
+              left off — it has already chosen today&apos;s move.
+            </p>
+
+            <form action={loginAction}>
+              <div className="lg-card">
+                <div className="lg-card-head">
+                  <span className="lg-avatar" aria-hidden="true">
+                    L
+                  </span>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="lg-card-identity">Owner sign-in</div>
+                    <div className="lg-card-note text-muted">
+                      This device · local session
+                    </div>
+                  </div>
+                  <span className="lg-card-tag">Local</span>
+                </div>
+
+                <div className="lg-card-body">
+                  <label className="lg-label text-muted" htmlFor="identifier">
+                    Owner email
+                  </label>
+                  <input
+                    autoComplete="username"
+                    className="lg-input"
+                    id="identifier"
+                    name="identifier"
+                    placeholder="you@example.com"
+                    type="text"
+                    aria-describedby={
+                      hasMessage ? 'login-feedback login-help' : 'login-help'
+                    }
+                  />
+                  {hasMessage ? (
+                    <p className="lg-alert" id="login-feedback" role="alert">
+                      {message}
+                    </p>
+                  ) : null}
+                  <p className="lg-hint text-muted" id="login-help">
+                    Must match the configured OWNER_EMAIL or OWNER_USER_ID.
+                  </p>
+                  <button
+                    className="btn btn-primary btn-block"
+                    type="submit"
+                    style={{
+                      padding: '13px 16px',
+                      fontSize: '15px',
+                      marginTop: '16px',
+                    }}
+                  >
+                    Unlock →
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            <div className="lg-actions">
+              <form action={resetLocalSessionAction}>
+                <button className="btn btn-ghost" type="submit">
+                  Reset local session cookies
+                </button>
+              </form>
+            </div>
+
+            <div className="lg-foot">
+              <div className="lg-foot-label text-muted">New here?</div>
+              <div className="lg-foot-row">
+                <p className="text-muted">
+                  Sign in first — LRNR asks for your goal and builds the path
+                  from there.
+                </p>
+              </div>
+            </div>
+
+            <p className="lg-privacy text-muted">
+              This local sign-in is disabled in production. Your progress, notes
+              and path stay in the database you own — LRNR is single-owner by
+              design.
+            </p>
+          </div>
+        </section>
+      </main>
+    </div>
   );
 }

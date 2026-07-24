@@ -9,6 +9,39 @@ import type {
   StartGoalResponse,
 } from '@/schemas/onboarding.schema';
 
+import './onboarding-modernist.css';
+
+/** Starting points offered by the design, as real goal text. */
+const GOAL_PRESETS: Array<{ label: string; sub: string }> = [
+  {
+    label: 'Ship reliable AI agents',
+    sub: 'Prompting → memory → evaluation → deploy',
+  },
+  {
+    label: 'Applied machine learning',
+    sub: 'From data to a model in production',
+  },
+  {
+    label: 'Distributed systems design',
+    sub: 'Consistency, scale, failure modes',
+  },
+];
+
+const DEPTH_OPTIONS: Array<{
+  value: PreferredDepth;
+  label: string;
+  sub: string;
+}> = [
+  { value: 'beginner', label: 'New to it', sub: 'Start at foundations' },
+  { value: 'intermediate', label: 'Some exposure', sub: 'Probe, then fill gaps' },
+  {
+    value: 'advanced',
+    label: 'Working knowledge',
+    sub: 'Straight to the edges',
+  },
+  { value: 'expert', label: 'Deep already', sub: 'Stress-test judgment' },
+];
+
 type ApiSuccess<T> = {
   ok: true;
   data: T;
@@ -27,13 +60,6 @@ const initialCurrentState: OnboardingCurrentResponse = {
   onboardingId: null,
   status: 'not_started',
   turnsCompleted: 0,
-};
-
-const depthLabels: Record<PreferredDepth, string> = {
-  beginner: 'Build foundations carefully',
-  intermediate: 'Connect concepts to practice',
-  advanced: 'Push toward architecture and tradeoffs',
-  expert: 'Stress-test expert judgment',
 };
 
 const progressSteps = ['Goal', 'Starting point', 'Probe', 'Path building'];
@@ -219,35 +245,21 @@ export function OnboardingPanel(): React.JSX.Element {
   }
 
   return (
-    <article className="cockpit-panel onboarding-card">
-      <div className="onboarding-card__intro">
-        <p className="cockpit-panel__label">Build your learning path</p>
-        <h2>Help LRNR understand where you are starting.</h2>
-        <p>
-          LRNR asks a few focused questions so the first lesson starts at the
-          right depth instead of guessing from a single goal.
-        </p>
-      </div>
-
-      <ol className="onboarding-steps" aria-label="Learning path progress">
+    <div className="ob-modernist">
+      <ol className="ob-steps" aria-label="Learning path progress">
         {progressSteps.map((step, index) => {
           const stepNumber = index + 1;
-          const isComplete = stepNumber < activeStep;
-          const isActive = stepNumber === activeStep;
+          const state =
+            stepNumber === activeStep
+              ? 'active'
+              : stepNumber < activeStep
+                ? 'complete'
+                : 'waiting';
 
           return (
-            <li
-              className={
-                isActive
-                  ? 'onboarding-step onboarding-step--active'
-                  : isComplete
-                    ? 'onboarding-step onboarding-step--complete'
-                    : 'onboarding-step'
-              }
-              key={step}
-            >
-              <span aria-hidden="true">{stepNumber}</span>
-              <strong>{step}</strong>
+            <li className="ob-step" data-state={state} key={step}>
+              <span className="ob-step-n">Step {stepNumber}</span>
+              <span className="ob-step-label">{step}</span>
             </li>
           );
         })}
@@ -255,135 +267,224 @@ export function OnboardingPanel(): React.JSX.Element {
 
       <div
         aria-live="polite"
-        className="onboarding-feedback"
+        className="ob-feedback"
         id={feedbackId}
         role={error === null ? 'status' : 'alert'}
       >
-        {message === null ? null : (
-          <p className="cockpit-feedback cockpit-feedback--success">
-            {message}
-          </p>
-        )}
-        {error === null ? null : (
-          <p className="cockpit-feedback cockpit-feedback--error">{error}</p>
-        )}
+        {message === null ? null : <p className="text-muted">{message}</p>}
+        {error === null ? null : <p className="ob-error">{error}</p>}
       </div>
 
       {current.status === 'not_started' ? (
-        <form
-          aria-describedby={feedbackId}
-          className="cockpit-form onboarding-form"
-          onSubmit={handleStartSubmit}
-        >
-          <label className="cockpit-field">
-            <span>Learning goal</span>
-            <small id={goalHelpId}>
-              Say what you want to be able to explain, build, or decide after
-              this path.
-            </small>
+        <form aria-describedby={feedbackId} onSubmit={handleStartSubmit}>
+          <p className="m-eyebrow ob-eyebrow">
+            What are you here to master?
+          </p>
+          <h3 className="ob-headline">
+            Name the capability, not a course title.
+          </h3>
+          <p className="ob-lede">
+            LRNR builds a living path to a real skill — one that stays current
+            as the field moves. Tell it where you want to end up.
+          </p>
+
+          <div className="ob-block">
+            <label className="ob-label text-muted" htmlFor="ob-goal">
+              Your goal
+            </label>
             <textarea
               aria-describedby={goalHelpId}
+              className="ob-textarea"
+              id="ob-goal"
               value={goal}
               onChange={(event) => setGoal(event.target.value)}
-              rows={4}
-              placeholder="Example: I want to understand agentic AI well enough to design a grounded study assistant."
+              rows={3}
+              placeholder="e.g. Build and ship reliable AI agents"
               required
             />
-          </label>
-          <label className="cockpit-field">
-            <span>Relevant background</span>
-            <small>
-              Optional, but useful: projects, study history, or what already
-              feels confusing.
-            </small>
-            <textarea
+            <p className="ob-help text-muted" id={goalHelpId}>
+              Say what you want to be able to explain, build, or decide after
+              this path.
+            </p>
+
+            <div
+              className="ob-label text-muted"
+              style={{ margin: '20px 0 0' }}
+              id="ob-preset-label"
+            >
+              Or start from a proven path
+            </div>
+            <div
+              className="ob-chips"
+              role="group"
+              aria-labelledby="ob-preset-label"
+            >
+              {GOAL_PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  className="ob-chip"
+                  aria-pressed={goal === preset.label}
+                  onClick={() => {
+                    setGoal(preset.label);
+                  }}
+                >
+                  {preset.label}
+                  <span>{preset.sub}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="ob-block">
+            <div className="ob-label text-muted" id="ob-depth-label">
+              Where you&apos;re starting
+            </div>
+            <div
+              className="ob-segs"
+              role="group"
+              aria-labelledby="ob-depth-label"
+            >
+              {DEPTH_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className="ob-seg"
+                  aria-pressed={preferredDepth === option.value}
+                  onClick={() => {
+                    setPreferredDepth(option.value);
+                  }}
+                >
+                  {option.label}
+                  <span>{option.sub}</span>
+                </button>
+              ))}
+            </div>
+            <p className="ob-help text-muted">
+              This is a first read, not a placement test — LRNR verifies it with
+              real probes in the interview that follows.
+            </p>
+          </div>
+
+          <div className="ob-block">
+            <label className="ob-label text-muted" htmlFor="ob-background">
+              Why it matters to you{' '}
+              <span style={{ textTransform: 'none', letterSpacing: 0 }}>
+                (optional — sharpens examples)
+              </span>
+            </label>
+            <input
+              className="ob-input"
+              id="ob-background"
               value={background}
               onChange={(event) => setBackground(event.target.value)}
-              rows={3}
-              placeholder="I have built simple RAG apps, but agent planning still feels fuzzy."
+              placeholder="e.g. Switching from backend into an AI role this year"
             />
-          </label>
-          <label className="cockpit-field">
-            <span>Preferred depth</span>
-            <select
-              value={preferredDepth}
-              onChange={(event) =>
-                setPreferredDepth(event.target.value as PreferredDepth)
-              }
+          </div>
+
+          <div className="ob-actions">
+            <button
+              className="btn btn-primary"
+              type="submit"
+              disabled={isPending || goal.trim().length === 0}
+              style={{ padding: '12px 22px', fontSize: '15px' }}
             >
-              {Object.entries(depthLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            className="workspace-button"
-            type="submit"
-            disabled={isPending || goal.trim().length === 0}
-          >
-            {isPending ? 'Starting path...' : 'Build my learning path'}
-          </button>
+              {isPending ? 'Starting path…' : 'Calibrate →'}
+            </button>
+          </div>
         </form>
       ) : current.status === 'processing' ? (
-        <div className="onboarding-processing" aria-busy="true">
-          <p className="cockpit-panel__label">Mapping first steps</p>
-          <h3>LRNR is turning your answers into a starting path.</h3>
-          <p>
+        <div aria-busy="true">
+          <p className="m-eyebrow ob-eyebrow">Mapping first steps</p>
+          <h3 className="ob-headline">
+            LRNR is turning your answers into a starting path.
+          </h3>
+          <p className="ob-lede">
             Your answers are saved. You can leave this surface and come back
             without losing progress.
           </p>
         </div>
       ) : current.status === 'completed' ? (
-        <div className="cockpit-stack onboarding-complete">
-          <p className="cockpit-panel__label">Path ready</p>
-          <h3>LRNR has enough context to prepare the first lesson.</h3>
-          <p className="cockpit-status">
-            Completed after {current.turnsCompleted} focused replies.
+        <div>
+          <p className="m-eyebrow ob-eyebrow">LRNR drafted your path</p>
+          <h3 className="ob-headline">
+            Enough context to prepare the first lesson.
+          </h3>
+          <p className="ob-lede">
+            Completed after {current.turnsCompleted} focused replies. A
+            dependency map, not a syllabus — it re-plans as you prove concepts.
           </p>
-          <div className="cockpit-chip-row">
-            <a className="workspace-button" href="/curriculum">
-              Open learning path
+          <div className="ob-actions">
+            <a className="btn btn-primary" href="/curriculum">
+              Open learning path →
             </a>
           </div>
         </div>
       ) : (
         <form
           aria-describedby={`${answerHelpId} ${feedbackId}`}
-          className="cockpit-form onboarding-form"
           onSubmit={handleReplySubmit}
         >
-          <p className="cockpit-status">
-            Question {Math.min(current.turnsCompleted + 1, 4)} of 4
-          </p>
-          <div className="cockpit-field">
-            <span>LRNR is asking this next</span>
-            <div className="cockpit-question">{current.currentQuestion}</div>
+          <p className="m-eyebrow ob-eyebrow">Calibrate the starting line</p>
+          <h3 className="ob-headline">
+            So LRNR skips what you know and probes what you don&apos;t.
+          </h3>
+
+          <div className="ob-question">
+            <div className="ob-label text-muted">LRNR is asking</div>
+            <p>{current.currentQuestion}</p>
           </div>
-          <label className="cockpit-field">
-            <span>Your answer</span>
-            <small id={answerHelpId}>
-              A specific answer helps LRNR choose the first useful lesson and
-              avoid repeating what you already know.
-            </small>
+
+          <div className="ob-block">
+            <label className="ob-label text-muted" htmlFor="ob-answer">
+              Your answer
+            </label>
             <textarea
               aria-describedby={answerHelpId}
+              className="ob-textarea"
+              id="ob-answer"
               value={answer}
               onChange={(event) => setAnswer(event.target.value)}
               rows={5}
               required
             />
-          </label>
-          <button
-            className="workspace-button"
-            type="submit"
-            disabled={isPending || answer.trim().length === 0}
-          >
-            {isPending ? 'Saving answer...' : 'Save answer'}
-          </button>
+            <p className="ob-help text-muted" id={answerHelpId}>
+              A specific answer helps LRNR choose the first useful lesson and
+              avoid repeating what you already know.
+            </p>
+          </div>
+
+          <div className="ob-actions">
+            <button
+              className="btn btn-primary"
+              type="submit"
+              disabled={isPending || answer.trim().length === 0}
+              style={{ padding: '12px 22px', fontSize: '15px' }}
+            >
+              {isPending ? 'Saving answer…' : 'Save answer →'}
+            </button>
+          </div>
         </form>
       )}
-    </article>
+
+      <div className="ob-promise">
+        <div className="ob-label text-muted">The LRNR promise</div>
+        <div className="ob-promise-quote">
+          <p>
+            The course that never goes out of date — because it isn&apos;t a
+            course.
+          </p>
+        </div>
+        <ul className="ob-promise-list">
+          <li>
+            You finish at <strong>mastery</strong>, never at 100% of a checklist.
+          </li>
+          <li>One reasoned next action a day — LRNR decides, you show up.</li>
+          <li>
+            Lessons are grounded in real sources, with the citations attached.
+          </li>
+        </ul>
+      </div>
+    </div>
   );
 }

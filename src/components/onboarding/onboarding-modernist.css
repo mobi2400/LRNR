@@ -1,0 +1,301 @@
+/* ==========================================================================
+   Enrollment panel. Implements "LRNR Onboarding.dc.html".
+
+   The design is a standalone 3-step wizard; LRNR's real flow is a goal +
+   calibration form followed by an adaptive interview, so the same visual
+   language is applied to the flow that actually exists.
+   ========================================================================== */
+
+.ob-modernist {
+  margin-top: 18px;
+}
+
+.ob-steps {
+  display: flex;
+  border: 2px solid var(--color-divider);
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ob-step {
+  padding: 8px 15px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ob-step + .ob-step {
+  border-left: 2px solid var(--color-divider);
+}
+
+.ob-step-n {
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--color-neutral-500);
+  display: block;
+}
+
+.ob-step-label {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 13px;
+  margin-top: 3px;
+  display: block;
+}
+
+.ob-step[data-state='active'] {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+.ob-step[data-state='active'] .ob-step-n {
+  color: color-mix(in srgb, var(--color-bg) 65%, transparent);
+}
+
+.ob-step[data-state='complete'] .ob-step-label {
+  color: var(--color-neutral-500);
+}
+
+/* — headings — */
+.ob-modernist .ob-eyebrow {
+  margin-top: 26px;
+}
+
+.ob-modernist .ob-headline {
+  font-size: clamp(24px, 3.2vw, 36px);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  margin: 14px 0 0;
+  max-width: 20ch;
+}
+
+.ob-modernist .ob-lede {
+  font-size: 15.5px;
+  line-height: 1.6;
+  margin: 14px 0 0;
+  max-width: 54ch;
+  color: var(--color-neutral-800);
+}
+
+/* — fields — */
+.ob-modernist .ob-block {
+  margin-top: 22px;
+  max-width: 600px;
+}
+
+.ob-modernist .ob-label {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  display: block;
+}
+
+.ob-modernist .ob-input,
+.ob-modernist .ob-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--color-text);
+  caret-color: var(--color-accent);
+  background: var(--color-surface);
+  border: 2px solid var(--color-divider);
+  border-radius: 0;
+  margin-top: 8px;
+}
+
+.ob-modernist .ob-textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.ob-modernist .ob-input:focus-visible,
+.ob-modernist .ob-textarea:focus-visible {
+  border-color: var(--color-accent);
+  outline-offset: 0;
+}
+
+.ob-modernist .ob-help {
+  font-size: 11.5px;
+  line-height: 1.5;
+  margin: 8px 0 0;
+}
+
+/* — preset chips — */
+.ob-modernist .ob-chips {
+  display: grid;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.ob-modernist .ob-chip {
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 14px;
+  padding: 13px 15px;
+  border: 2px solid var(--color-divider);
+  background: var(--color-bg);
+  color: var(--color-text);
+  border-radius: 0;
+}
+
+.ob-modernist .ob-chip span {
+  display: block;
+  font-weight: 400;
+  font-size: 11.5px;
+  color: var(--color-neutral-600);
+  margin-top: 3px;
+}
+
+.ob-modernist .ob-chip[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-100);
+  color: var(--color-accent-700);
+}
+
+/* — segmented calibration — */
+.ob-modernist .ob-segs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.ob-modernist .ob-seg {
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 13.5px;
+  padding: 11px 14px;
+  border: 2px solid var(--color-divider);
+  background: var(--color-bg);
+  color: var(--color-text);
+  border-radius: 0;
+}
+
+.ob-modernist .ob-seg span {
+  display: block;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--color-neutral-600);
+  margin-top: 3px;
+}
+
+.ob-modernist .ob-seg[aria-pressed='true'] {
+  border-color: var(--color-text);
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+.ob-modernist .ob-seg[aria-pressed='true'] span {
+  color: color-mix(in srgb, var(--color-bg) 70%, transparent);
+}
+
+/* — question — */
+.ob-modernist .ob-question {
+  border-left: 2px solid var(--color-accent);
+  background: var(--color-accent-100);
+  padding: 16px 18px;
+  margin-top: 14px;
+}
+
+.ob-modernist .ob-question p {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 17px;
+  line-height: 1.35;
+  margin: 8px 0 0;
+  letter-spacing: -0.01em;
+}
+
+/* — feedback — */
+.ob-modernist .ob-feedback p {
+  font-size: 12.5px;
+  margin: 14px 0 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.ob-modernist .ob-feedback p::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  display: inline-block;
+  margin-top: 5px;
+  flex: none;
+  background: var(--color-neutral-500);
+}
+
+.ob-modernist .ob-feedback .ob-error {
+  color: var(--color-accent-700);
+  font-weight: 600;
+}
+
+.ob-modernist .ob-feedback .ob-error::before {
+  background: var(--color-accent);
+}
+
+.ob-modernist .ob-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 26px;
+  flex-wrap: wrap;
+}
+
+/* — promise list — */
+.ob-modernist .ob-promise {
+  border-top: 2px solid var(--color-divider);
+  margin-top: 28px;
+  padding-top: 16px;
+}
+
+.ob-modernist .ob-promise-quote {
+  border-left: 2px solid var(--color-accent);
+  padding: 4px 0 4px 16px;
+  margin-top: 12px;
+}
+
+.ob-modernist .ob-promise-quote p {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 16px;
+  line-height: 1.3;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.ob-modernist .ob-promise-list {
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ob-modernist .ob-promise-list li {
+  border-top: 2px solid var(--color-divider);
+  padding: 13px 0;
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: 11px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--color-neutral-800);
+}
+
+.ob-modernist .ob-promise-list li + li {
+  border-top-width: 1px;
+}
+
+.ob-modernist .ob-promise-list li::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: var(--color-accent);
+  margin-top: 6px;
+}

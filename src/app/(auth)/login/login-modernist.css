@@ -1,0 +1,309 @@
+/* ==========================================================================
+   Login. Implements "LRNR Login.dc.html" — split accent poster + auth panel.
+   The auth pages sit outside the app shell, so the root carries
+   .lrnr-modernist itself.
+   ========================================================================== */
+
+.login-modernist {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+}
+
+/* — poster — */
+.login-modernist .lg-poster {
+  background: var(--color-accent);
+  color: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 32px;
+  padding: clamp(28px, 4vw, 52px);
+}
+
+.login-modernist .lg-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+
+.login-modernist .lg-brand::before {
+  content: '';
+  width: 11px;
+  height: 11px;
+  background: var(--color-bg);
+  display: inline-block;
+  flex: none;
+}
+
+.login-modernist .lg-brand span {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: 0.02em;
+}
+
+.login-modernist .lg-kicker {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 800;
+  opacity: 0.85;
+}
+
+.login-modernist .lg-headline {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: clamp(34px, 4.6vw, 60px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  margin: 18px 0 0;
+  text-wrap: balance;
+  max-width: 16ch;
+}
+
+.login-modernist .lg-lede {
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 20px 0 0;
+  max-width: 34ch;
+  opacity: 0.9;
+}
+
+.login-modernist .lg-facts {
+  border-top: 2px solid color-mix(in srgb, var(--color-bg) 45%, transparent);
+  padding-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.login-modernist .lg-facts > div {
+  padding: 0 14px;
+}
+
+.login-modernist .lg-facts > div:first-child {
+  padding-left: 0;
+}
+
+.login-modernist .lg-facts > div + div {
+  border-left: 2px solid color-mix(in srgb, var(--color-bg) 45%, transparent);
+}
+
+.login-modernist .lg-fact-title {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.login-modernist .lg-fact-note {
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  opacity: 0.8;
+  margin-top: 6px;
+}
+
+/* — panel — */
+.login-modernist .lg-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(28px, 5vw, 64px);
+}
+
+.login-modernist .lg-panel-inner {
+  width: 100%;
+  max-width: 400px;
+}
+
+.login-modernist .lg-title {
+  font-size: clamp(26px, 3.4vw, 38px);
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  margin: 14px 0 0;
+}
+
+.login-modernist .lg-sub {
+  font-size: 14.5px;
+  line-height: 1.6;
+  margin: 10px 0 0;
+  max-width: 42ch;
+}
+
+.login-modernist .lg-card {
+  border: 2px solid var(--color-divider);
+  margin-top: 24px;
+}
+
+.login-modernist .lg-card-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 13px 16px;
+  border-bottom: 2px solid var(--color-divider);
+}
+
+.login-modernist .lg-avatar {
+  width: 34px;
+  height: 34px;
+  background: var(--color-text);
+  color: var(--color-bg);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 14px;
+  flex: none;
+}
+
+.login-modernist .lg-card-identity {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.login-modernist .lg-card-note {
+  font-size: 11px;
+  margin-top: 1px;
+}
+
+.login-modernist .lg-card-tag {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--color-neutral-700);
+}
+
+.login-modernist .lg-card-tag::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--color-accent);
+  display: inline-block;
+  flex: none;
+}
+
+.login-modernist .lg-card-body {
+  padding: 18px 16px;
+}
+
+.login-modernist .lg-label {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  display: block;
+}
+
+.login-modernist .lg-input {
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 16px;
+  color: var(--color-text);
+  caret-color: var(--color-accent);
+  background: var(--color-surface);
+  border: 2px solid var(--color-divider);
+  border-radius: 0;
+  margin-top: 8px;
+}
+
+.login-modernist .lg-input:focus-visible {
+  border-color: var(--color-accent);
+  outline-offset: 0;
+}
+
+.login-modernist .lg-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 9px;
+  font-size: 12px;
+  color: var(--color-accent-700);
+  font-weight: 600;
+}
+
+.login-modernist .lg-alert::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  background: var(--color-accent);
+  display: inline-block;
+  flex: none;
+  margin-top: 5px;
+}
+
+.login-modernist .lg-hint {
+  font-size: 11.5px;
+  line-height: 1.5;
+  margin: 8px 0 0;
+}
+
+.login-modernist .lg-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.login-modernist .lg-foot {
+  border-top: 2px solid var(--color-divider);
+  margin-top: 22px;
+  padding-top: 16px;
+}
+
+.login-modernist .lg-foot-label {
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.login-modernist .lg-foot-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.login-modernist .lg-foot-row p {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 32ch;
+}
+
+.login-modernist .lg-privacy {
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 22px 0 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.login-modernist .lg-privacy::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  background: var(--color-neutral-400);
+  display: inline-block;
+  margin-top: 4px;
+  flex: none;
+}
+
+@media (max-width: 820px) {
+  .login-modernist {
+    grid-template-columns: 1fr;
+  }
+
+  .login-modernist .lg-poster {
+    min-height: 280px;
+  }
+}

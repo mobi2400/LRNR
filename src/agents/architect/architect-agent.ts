@@ -360,7 +360,9 @@ function blueprintFromDecision(
   }
 
   return onboardingTopicBlueprintSchema.parse({
-    topicSlug: toSlug(state.goal),
+    // Slug from the model's clean topic title, not the raw goal sentence, so
+    // we get "system-design" instead of "i-want-to-learn-sysytem-design".
+    topicSlug: toSlug(decision.blueprint.title) || toSlug(state.goal),
     title: decision.blueprint.title.slice(0, 255),
     requiredDepth: decision.blueprint.requiredDepth,
     prerequisiteMap: cap(decision.blueprint.prerequisiteMap, 12),

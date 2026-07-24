@@ -121,5 +121,9 @@ describe('architect onboarding agent', () => {
     expect(progress.completed).toBe(true);
     expect(progress.state.topicBlueprint?.conceptOutline).toContain('agent state');
     expect(progress.completionSummary?.dailyConstraint).toBe('1 hour daily');
+    // Slug comes from the model's clean title, not the raw goal sentence.
+    expect(progress.state.topicBlueprint?.topicSlug).toBe(
+      'agentic-ai-foundations',
+    );
   });
 });

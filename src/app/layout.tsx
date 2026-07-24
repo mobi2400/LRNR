@@ -24,8 +24,15 @@ import '@/styles/modernist/settings.css';
 import '@/styles/modernist/login.css';
 import '@/styles/modernist/onboarding.css';
 
+/**
+ * Pages set their own title from real learning state; the template keeps the
+ * product name as the suffix so a tab reads "Kafka event streaming · LRNR".
+ */
 export const metadata: Metadata = {
-  title: 'LRNR',
+  title: {
+    default: 'LRNR',
+    template: '%s · LRNR',
+  },
   description: 'Personal-first learning operating system.',
 };
 

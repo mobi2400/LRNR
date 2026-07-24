@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import type { Metadata } from 'next';
 
 import { redirect } from 'next/navigation';
 
@@ -6,6 +7,11 @@ import { loginRequestSchema } from '@/schemas/auth.schema';
 import { isOwnerIdentity } from '@/server/owner';
 import { clearSessionCookies, createLocalOwnerSession } from '@/server/session';
 
+
+export const metadata: Metadata = {
+  title: 'Sign in',
+  description: 'Unlock your private LRNR workspace.',
+};
 
 type RouteSearchParams = Record<string, string | string[] | undefined>;
 

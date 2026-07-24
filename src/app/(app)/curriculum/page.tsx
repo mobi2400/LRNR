@@ -1,4 +1,5 @@
-import type { JSX } from 'react';
+import { cache, type JSX } from 'react';
+import type { Metadata } from 'next';
 
 import Link from 'next/link';
 
@@ -8,7 +9,49 @@ import {
   assertUnlockedOwnerSession,
   getSessionAccessState,
 } from '@/server/session';
+import {
+  formatTopicLabel,
+  getMetadataUserId,
+  toMetaText,
+} from '@/server/page-metadata';
 import { getCurriculumMap } from '@/services/curriculum.service';
+
+const loadCurriculum = cache(async (userId: string) =>
+  getCurriculumMap({ userId, requestId: 'curriculum-page' }),
+);
+
+export async function generateMetadata(): Promise<Metadata> {
+  const userId = await getMetadataUserId();
+
+  if (userId === null) {
+    return { title: 'Path' };
+  }
+
+  try {
+    const curriculum = await loadCurriculum(userId);
+
+    if (curriculum.topicSlug === null) {
+      return {
+        title: 'Path',
+        description: 'No learning path has been planned yet.',
+      };
+    }
+
+    const completed = curriculum.sessions.filter(
+      (session) => session.status === 'completed',
+    ).length;
+
+    return {
+      title: `Path · ${toMetaText(formatTopicLabel(curriculum.topicSlug), 55)}`,
+      description: toMetaText(
+        `${completed} of ${curriculum.sessions.length} sessions complete. ${curriculum.roadmap?.goal ?? ''}`,
+        160,
+      ),
+    };
+  } catch {
+    return { title: 'Path' };
+  }
+}
 
 
 function formatTopic(topicSlug: string): string {
@@ -24,10 +67,7 @@ export default async function CurriculumPage(): Promise<JSX.Element> {
 
   assertUnlockedOwnerSession(state);
 
-  const curriculum = await getCurriculumMap({
-    userId: state.userId,
-    requestId: 'curriculum-page',
-  });
+  const curriculum = await loadCurriculum(state.userId);
   const completedCount = curriculum.sessions.filter(
     (session) => session.status === 'completed',
   ).length;

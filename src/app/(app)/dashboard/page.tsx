@@ -1,4 +1,5 @@
-import type { JSX } from 'react';
+import { cache, type JSX } from 'react';
+import type { Metadata } from 'next';
 
 import Link from 'next/link';
 
@@ -13,8 +14,50 @@ import {
   assertUnlockedOwnerSession,
   getSessionAccessState,
 } from '@/server/session';
+import { getMetadataUserId, toMetaText } from '@/server/page-metadata';
 import { dashboardService } from '@/services/dashboard.service';
 import { settingsService } from '@/services/settings.service';
+
+/**
+ * Cached for the request so generateMetadata and the page body share one pass
+ * over the database instead of querying it twice.
+ */
+const loadTodayData = cache(async (userId: string) => {
+  const actor = { userId, requestId: 'dashboard-page' };
+
+  const [dashboard, settings] = await Promise.all([
+    dashboardService.getDashboard(actor),
+    settingsService.getSettings(actor),
+  ]);
+
+  return { dashboard, settings, viewModel: buildDashboardViewModel(dashboard) };
+});
+
+export async function generateMetadata(): Promise<Metadata> {
+  const userId = await getMetadataUserId();
+
+  if (userId === null) {
+    return { title: 'Today' };
+  }
+
+  try {
+    const { viewModel } = await loadTodayData(userId);
+    const title =
+      viewModel.mode === 'no_goal'
+        ? 'Today'
+        : `Today · ${toMetaText(viewModel.topicLabel, 60)}`;
+
+    return {
+      title,
+      description: toMetaText(
+        `${viewModel.primaryTitle} ${viewModel.progressText}`,
+        160,
+      ),
+    };
+  } catch {
+    return { title: 'Today' };
+  }
+}
 
 
 /**
@@ -34,12 +77,7 @@ export default async function DashboardPage(): Promise<JSX.Element> {
   const state = await getSessionAccessState();
   assertUnlockedOwnerSession(state);
 
-  const actor = { userId: state.userId, requestId: 'dashboard-page' };
-  const [dashboard, settings] = await Promise.all([
-    dashboardService.getDashboard(actor),
-    settingsService.getSettings(actor),
-  ]);
-  const viewModel = buildDashboardViewModel(dashboard);
+  const { dashboard, settings, viewModel } = await loadTodayData(state.userId);
   const hasLearningPath = viewModel.mode !== 'no_goal';
   const needsPreparation =
     viewModel.mode === 'lesson_not_ready' &&

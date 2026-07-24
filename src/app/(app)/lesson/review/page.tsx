@@ -1,4 +1,5 @@
-import type { JSX } from 'react';
+import { cache, type JSX } from 'react';
+import type { Metadata } from 'next';
 
 import Link from 'next/link';
 
@@ -8,7 +9,47 @@ import {
   assertUnlockedOwnerSession,
   getSessionAccessState,
 } from '@/server/session';
+import {
+  formatTopicLabel,
+  getMetadataUserId,
+  toMetaText,
+} from '@/server/page-metadata';
 import { getCurrentLesson } from '@/services/lesson.service';
+
+const loadLesson = cache(async (userId: string) =>
+  getCurrentLesson({ userId }),
+);
+
+export async function generateMetadata(): Promise<Metadata> {
+  const userId = await getMetadataUserId();
+
+  if (userId === null) {
+    return { title: 'Review' };
+  }
+
+  try {
+    const { lesson } = await loadLesson(userId);
+
+    if (lesson === null) {
+      return {
+        title: 'Review',
+        description: 'Review unlocks once a lesson is persisted.',
+      };
+    }
+
+    const probeCount = lesson.reviewQuestions.length;
+
+    return {
+      title: `Review · ${toMetaText(lesson.title, 55)}`,
+      description: toMetaText(
+        `${probeCount} probe${probeCount === 1 ? '' : 's'} from this lesson. ${lesson.mentalModel}`,
+        160,
+      ),
+    };
+  } catch {
+    return { title: 'Review' };
+  }
+}
 
 
 export default async function LessonReviewPage(): Promise<JSX.Element> {
@@ -16,9 +57,7 @@ export default async function LessonReviewPage(): Promise<JSX.Element> {
 
   assertUnlockedOwnerSession(state);
 
-  const currentLesson = await getCurrentLesson({
-    userId: state.userId,
-  });
+  const currentLesson = await loadLesson(state.userId);
   const lesson = currentLesson.lesson;
   const hasProbes = lesson !== null && lesson.reviewQuestions.length > 0;
 
@@ -48,9 +87,9 @@ export default async function LessonReviewPage(): Promise<JSX.Element> {
                 </div>
               </div>
               <div>
-                <div className="m-stat-label text-muted">From</div>
+                <div className="m-stat-label text-muted">Topic</div>
                 <div className="m-stat-value" style={{ fontSize: '13px' }}>
-                  This lesson
+                  {formatTopicLabel(lesson.topicSlug)}
                 </div>
               </div>
             </div>

@@ -1,4 +1,5 @@
-import type { JSX } from 'react';
+import { cache, type JSX } from 'react';
+import type { Metadata } from 'next';
 
 import Link from 'next/link';
 
@@ -9,7 +10,38 @@ import {
   assertUnlockedOwnerSession,
   getSessionAccessState,
 } from '@/server/session';
+import { getMetadataUserId, toMetaText } from '@/server/page-metadata';
 import { getCurrentLesson } from '@/services/lesson.service';
+
+const loadLesson = cache(async (userId: string) =>
+  getCurrentLesson({ userId }),
+);
+
+export async function generateMetadata(): Promise<Metadata> {
+  const userId = await getMetadataUserId();
+
+  if (userId === null) {
+    return { title: 'Lesson' };
+  }
+
+  try {
+    const { lesson } = await loadLesson(userId);
+
+    if (lesson === null) {
+      return {
+        title: 'Lesson',
+        description: 'No lesson is persisted yet.',
+      };
+    }
+
+    return {
+      title: toMetaText(lesson.title, 70),
+      description: toMetaText(lesson.objective, 160),
+    };
+  } catch {
+    return { title: 'Lesson' };
+  }
+}
 
 
 type EmptyLessonCopy = { title: string; body: string };
@@ -52,9 +84,7 @@ export default async function CurrentLessonPage(): Promise<JSX.Element> {
 
   assertUnlockedOwnerSession(state);
 
-  const currentLesson = await getCurrentLesson({
-    userId: state.userId,
-  });
+  const currentLesson = await loadLesson(state.userId);
   const lesson = currentLesson.lesson;
   const emptyCopy = getEmptyLessonCopy(currentLesson.reasonIfEmpty);
 

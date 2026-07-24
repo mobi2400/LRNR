@@ -1,4 +1,10 @@
 import type { JSX } from 'react';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Unlock',
+  description: 'Enter the private access secret to open this workspace.',
+};
 
 import { redirect } from 'next/navigation';
 

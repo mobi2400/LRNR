@@ -1,4 +1,5 @@
 import { extractStructured, generateStructured } from '@/lib/llm';
+import { appLogger } from '@/lib/logger';
 import { serverConfig } from '@/server/config';
 import {
   type FetchedSource,
@@ -538,7 +539,12 @@ export async function buildTopicKnowledgeDocument(
       failedSources,
       synthesize,
     );
-  } catch {
+  } catch (error) {
+    appLogger.warn('cartographer.synthesis_fallback', {
+      topicSlug: topicBrief.topicSlug,
+      error: error instanceof Error ? error.message : 'unknown',
+    });
+
     return buildDeterministicKnowledgeDocument(
       topicBrief,
       sources,

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
 import { generateStructured, type StructuredGenerationInput } from '@/lib/llm';
+import { appLogger } from '@/lib/logger';
 import { serverConfig } from '@/server/config';
 import {
   architectOnboardingStateSchema,
@@ -511,7 +512,11 @@ Return JSON: { "inferredBackground": [], "strengths": [], "weakAreas": [], "misc
           conceptOutline: cap(generated.conceptOutline, 16),
         });
         recommendedSources = generated.recommendedSources.slice(0, 8);
-      } catch {
+      } catch (error) {
+        appLogger.warn('architect.blueprint_fallback', {
+          goal: state.goal,
+          error: error instanceof Error ? error.message : 'unknown',
+        });
         topicBlueprint = buildTopicBlueprint(state.goal, state.preferredDepth);
       }
     }
@@ -642,7 +647,11 @@ export async function createInitialOnboardingState(
   if (resolved !== null) {
     try {
       firstQuestion = await generateFirstQuestion(input, resolved);
-    } catch {
+    } catch (error) {
+      appLogger.warn('architect.first_question_fallback', {
+        goal,
+        error: error instanceof Error ? error.message : 'unknown',
+      });
       firstQuestion = deterministicQuestions(goal)[0] as OnboardingQuestion;
     }
   }
@@ -703,7 +712,15 @@ export async function applyOnboardingAnswer(
 
   try {
     return await applyLlmAnswer(state, answer, question, resolved);
-  } catch {
+  } catch (error) {
+    // A silent fallback here previously made the interview look "dumb" with no
+    // trace of why, so every degradation is now logged.
+    appLogger.warn('architect.turn_fallback', {
+      onboardingId: state.onboardingId,
+      turn: state.turns.length + 1,
+      error: error instanceof Error ? error.message : 'unknown',
+    });
+
     return applyDeterministicAnswer(state, answer, question);
   }
 }

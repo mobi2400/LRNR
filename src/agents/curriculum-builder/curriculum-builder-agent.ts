@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
 import { generateStructured, type StructuredGenerationInput } from '@/lib/llm';
+import { appLogger } from '@/lib/logger';
 import { serverConfig } from '@/server/config';
 import type { TopicBriefRecord } from '@/db/topic-briefs.repo';
 import type { TopicKnowledgeBaseRecord } from '@/db/knowledge.repo';
@@ -406,7 +407,11 @@ export async function buildInitialCurriculumPlan(
         profile,
         resolved,
       );
-    } catch {
+    } catch (error) {
+      appLogger.warn('curriculum_builder.design_fallback', {
+        topicSlug: topicBrief.topicSlug,
+        error: error instanceof Error ? error.message : 'unknown',
+      });
       sessions = buildSessions(usableConcepts, topicBrief, profile);
     }
   }

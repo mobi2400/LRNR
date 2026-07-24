@@ -514,7 +514,13 @@ export async function answerLessonFollowUp(
       input.question,
       dependencies,
     );
-  } catch {
+  } catch (error) {
+    appLogger.warn('lesson.follow_up_fallback', {
+      requestId: actor.requestId,
+      sessionId: input.sessionId,
+      error: error instanceof Error ? error.message : 'unknown',
+    });
+
     return templateFollowUp(lesson, input.question);
   }
 }

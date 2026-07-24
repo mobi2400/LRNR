@@ -20,43 +20,21 @@ const navigationItems: Array<{
   href: string;
   label: string;
   route: AppShellRoute;
-  shortLabel: string;
 }> = [
-  {
-    href: '/dashboard',
-    label: 'Today',
-    route: 'dashboard',
-    shortLabel: 'Today',
-  },
-  {
-    href: '/lesson/current',
-    label: 'Lesson',
-    route: 'lesson-current',
-    shortLabel: 'Lesson',
-  },
-  {
-    href: '/lesson/review',
-    label: 'Review',
-    route: 'lesson-review',
-    shortLabel: 'Review',
-  },
-  {
-    href: '/curriculum',
-    label: 'Path',
-    route: 'curriculum',
-    shortLabel: 'Path',
-  },
-  {
-    href: '/settings',
-    label: 'Settings',
-    route: 'settings',
-    shortLabel: 'Settings',
-  },
+  { href: '/dashboard', label: 'Today', route: 'dashboard' },
+  { href: '/lesson/current', label: 'Lesson', route: 'lesson-current' },
+  { href: '/lesson/review', label: 'Review', route: 'lesson-review' },
+  { href: '/curriculum', label: 'Path', route: 'curriculum' },
+  { href: '/settings', label: 'Settings', route: 'settings' },
 ];
 
 /**
  * Shared protected shell for LRNR's learner-facing cockpit surfaces.
  * It owns navigation and landmarks only; page components own learning data.
+ *
+ * The rail follows the modernist redesign and is identical on every page, so
+ * this component also carries the .lrnr-modernist token scope that page-level
+ * stylesheets nest inside.
  */
 export function AppShell({
   activeRoute,
@@ -65,60 +43,53 @@ export function AppShell({
   children,
 }: AppShellProps): JSX.Element {
   return (
-    <div className="cockpit-shell">
-      <a className="skip-link" href="#main-content">
-        Skip to learning content
-      </a>
-      <aside className="cockpit-sidebar" aria-label="LRNR workspace">
-        <div className="cockpit-brand" aria-label="LRNR learning cockpit">
-          <p className="cockpit-kicker">LRNR</p>
-          <strong>Learning cockpit</strong>
-          <p>
-            Your private study surface for today, review, and the path ahead.
-          </p>
-        </div>
-        <nav className="cockpit-nav" aria-label="Primary navigation">
-          {navigationItems.map((item, index) => {
-            const isActive = item.route === activeRoute;
+    <div className="lrnr-modernist">
+      <div className="lrnr-shell">
+        <a className="skip-link" href="#main-content">
+          Skip to learning content
+        </a>
+        <aside className="lrnr-rail" aria-label="LRNR workspace">
+          <div>
+            <div className="lrnr-brand" aria-label="LRNR learning cockpit">
+              <span>LRNR</span>
+            </div>
+            <p className="lrnr-tagline text-muted">
+              Your personal AI university. Learn to mastery, not to 100%.
+            </p>
+          </div>
+          <nav className="lrnr-railnav" aria-label="Primary">
+            {navigationItems.map((item, index) => {
+              const isActive = item.route === activeRoute;
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={isActive ? 'page' : undefined}
-                className={
-                  isActive
-                    ? 'cockpit-nav__item cockpit-nav__item--active'
-                    : 'cockpit-nav__item'
-                }
-              >
-                <span className="cockpit-nav__index" aria-hidden="true">
-                  {index + 1}
-                </span>
-                <span>{item.shortLabel}</span>
-              </Link>
-            );
-          })}
-        </nav>
-        <div
-          className="cockpit-sidebar__meta"
-          aria-label="Private workspace status"
-        >
-          <span className="cockpit-sidebar__meta-label">Owner</span>
-          <strong className="cockpit-identity" title={identity}>
-            {identity}
-          </strong>
-          <span className="cockpit-private-status">
-            Private workspace active
-          </span>
-          {unlockExpiresAt === null ? null : (
-            <span className="sr-only">Unlock expires at {unlockExpiresAt}</span>
-          )}
-        </div>
-      </aside>
-      <main className="cockpit-main" id="main-content" tabIndex={-1}>
-        {children}
-      </main>
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={isActive ? 'page' : undefined}
+                >
+                  <span className="lrnr-railnav-index" aria-hidden="true">
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+          <div className="lrnr-owner" aria-label="Private workspace status">
+            <div className="lrnr-owner-label text-muted">Owner</div>
+            <div className="lrnr-owner-identity" title={identity}>
+              {identity}
+            </div>
+            <div className="lrnr-owner-status">Private workspace active</div>
+            {unlockExpiresAt === null ? null : (
+              <span className="sr-only">Unlock expires at {unlockExpiresAt}</span>
+            )}
+          </div>
+        </aside>
+        <main className="lrnr-main" id="main-content" tabIndex={-1}>
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

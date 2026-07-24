@@ -1,0 +1,493 @@
+/* ==========================================================================
+   Modernist — shared foundation.
+
+   Tokens and component classes for the LRNR redesign, taken from the
+   "modernist" design system in the Claude Design project
+   "Application redesign for retention".
+
+   Scope: everything lives under .lrnr-modernist. The app shell applies that
+   class, so every protected page inherits the tokens; the auth pages (login,
+   onboarding) apply it on their own root. Page-specific layout lives in each
+   page's own stylesheet, nested inside this scope.
+   ========================================================================== */
+
+.lrnr-modernist {
+  --color-bg: #f3f2f2;
+  --color-surface: #eae9e9;
+  --color-text: #201e1d;
+  --color-accent: #ec3013;
+  --color-divider: color-mix(in srgb, #201e1d 40%, transparent);
+  --color-neutral-100: #f8f4f4;
+  --color-neutral-200: #eae7e7;
+  --color-neutral-300: #d7d3d3;
+  --color-neutral-400: #bab6b6;
+  --color-neutral-500: #9b9797;
+  --color-neutral-600: #7d7979;
+  --color-neutral-700: #605d5d;
+  --color-neutral-800: #444141;
+  --color-neutral-900: #2d2b2b;
+  --color-accent-100: #fff2ef;
+  --color-accent-600: #dd2b0f;
+  --color-accent-700: #ae1800;
+  --color-accent-800: #7c1405;
+  --font-heading: var(--font-archivo), Archivo, system-ui, sans-serif;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-heading);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.lrnr-modernist h1,
+.lrnr-modernist h2,
+.lrnr-modernist h3,
+.lrnr-modernist h4 {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+.lrnr-modernist .text-muted {
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+.lrnr-modernist a {
+  color: inherit;
+}
+
+.lrnr-modernist :focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.lrnr-modernist .m-rule {
+  height: 2px;
+  border: 0;
+  margin: 0;
+  background: var(--color-text);
+}
+
+/* — buttons — */
+.lrnr-modernist .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--color-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0;
+  padding: var(--space-2) var(--space-4);
+}
+
+.lrnr-modernist .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.lrnr-modernist .btn-primary {
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+
+.lrnr-modernist .btn-primary:hover:not(:disabled) {
+  background: var(--color-accent-600);
+}
+
+.lrnr-modernist .btn-secondary {
+  border-color: var(--color-divider);
+}
+
+.lrnr-modernist .btn-secondary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+
+.lrnr-modernist .btn-ghost {
+  color: var(--color-accent);
+  padding-inline: var(--space-1);
+}
+
+.lrnr-modernist .btn-ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+.lrnr-modernist .btn-danger {
+  border-color: var(--color-accent);
+  color: var(--color-accent-700);
+}
+
+/* — page header — */
+.lrnr-modernist .m-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  border-bottom: 3px double var(--color-text);
+  padding: 26px clamp(20px, 4vw, 44px) 16px;
+}
+
+.lrnr-modernist .m-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-accent-700);
+  font-weight: 800;
+  margin: 0;
+}
+
+.lrnr-modernist .m-eyebrow::before {
+  content: '';
+  width: 9px;
+  height: 9px;
+  background: var(--color-accent);
+  display: inline-block;
+  flex: none;
+}
+
+.lrnr-modernist .m-title {
+  font-weight: 800;
+  font-size: clamp(22px, 3vw, 30px);
+  letter-spacing: 0.05em;
+  margin: 8px 0 0;
+}
+
+.lrnr-modernist .m-subtitle {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin: 7px 0 0;
+}
+
+/* — stat bar (bordered, divided cells) — */
+.lrnr-modernist .m-statbar {
+  display: flex;
+  border: 2px solid var(--color-divider);
+}
+
+.lrnr-modernist .m-statbar > div {
+  padding: 8px 16px;
+  text-align: left;
+}
+
+.lrnr-modernist .m-statbar > div + div {
+  border-left: 2px solid var(--color-divider);
+}
+
+.lrnr-modernist .m-stat-label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.lrnr-modernist .m-stat-value {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 20px;
+  margin-top: 3px;
+}
+
+/* — segmented control — */
+.lrnr-modernist .m-seg {
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 13px;
+  padding: 9px 14px;
+  border: 2px solid var(--color-divider);
+  background: var(--color-bg);
+  color: var(--color-text);
+  border-radius: 0;
+}
+
+.lrnr-modernist .m-seg[aria-pressed='true'] {
+  border-color: var(--color-text);
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+.lrnr-modernist .m-seg:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* — toggle — */
+.lrnr-modernist .m-toggle {
+  cursor: pointer;
+  width: 52px;
+  height: 28px;
+  border: 2px solid var(--color-divider);
+  background: var(--color-bg);
+  position: relative;
+  flex: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+.lrnr-modernist .m-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: var(--color-neutral-500);
+}
+
+.lrnr-modernist .m-toggle[aria-checked='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-100);
+}
+
+.lrnr-modernist .m-toggle[aria-checked='true'] .m-knob {
+  left: auto;
+  right: 2px;
+  background: var(--color-accent);
+}
+
+.lrnr-modernist .m-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Controls and panels whose backend does not exist yet keep the design's
+   visual language but are inert and labelled, never faked as working. */
+.lrnr-modernist .m-pending {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-neutral-700);
+  border: 1px solid var(--color-divider);
+  padding: 3px 7px;
+  white-space: nowrap;
+}
+
+.lrnr-modernist .m-empty {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  text-align: center;
+  padding: 28px 20px;
+}
+
+.lrnr-modernist .m-empty p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  max-width: 46ch;
+}
+
+/* — dialog — */
+.lrnr-modernist .m-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  z-index: 50;
+  background: color-mix(in srgb, var(--color-neutral-900) 50%, transparent);
+}
+
+.lrnr-modernist .m-dialog {
+  max-width: 440px;
+  width: 100%;
+  border: 2px solid var(--color-text);
+  background: var(--color-bg);
+  padding: 26px 26px 22px;
+}
+
+.lrnr-modernist .m-dialog-title {
+  font-weight: 800;
+  font-size: 21px;
+  margin: 0;
+}
+
+.lrnr-modernist .m-dialog-body {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-neutral-800);
+  margin-top: 10px;
+}
+
+.lrnr-modernist .m-dialog-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+  justify-content: flex-end;
+}
+
+/* ==========================================================================
+   App shell — the rail is identical across every page of the redesign.
+   ========================================================================== */
+
+.lrnr-shell {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--color-bg);
+}
+
+.lrnr-rail {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  border-right: 2px solid var(--color-divider);
+  padding: 24px 16px 18px;
+}
+
+.lrnr-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.lrnr-brand::before {
+  content: '';
+  width: 11px;
+  height: 11px;
+  background: var(--color-accent);
+  display: inline-block;
+  flex: none;
+}
+
+.lrnr-brand span {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 19px;
+  letter-spacing: 0.02em;
+}
+
+.lrnr-tagline {
+  font-size: 11px;
+  margin: 8px 0 0;
+  line-height: 1.45;
+}
+
+.lrnr-railnav {
+  display: grid;
+  gap: 2px;
+}
+
+.lrnr-railnav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 13.5px;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.lrnr-railnav a:hover {
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+
+.lrnr-railnav a[aria-current='page'] {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+.lrnr-railnav a[aria-current='page'] .lrnr-railnav-index {
+  opacity: 0.6;
+}
+
+.lrnr-railnav-index {
+  font-size: 10px;
+  opacity: 0.5;
+  width: 14px;
+}
+
+.lrnr-owner {
+  margin-top: auto;
+  border-top: 2px solid var(--color-divider);
+  padding-top: 14px;
+}
+
+.lrnr-owner-label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.lrnr-owner-identity {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 13px;
+  margin-top: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lrnr-owner-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 9px;
+  font-size: 11px;
+  color: var(--color-neutral-700);
+}
+
+.lrnr-owner-status::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--color-accent);
+  display: inline-block;
+  flex: none;
+}
+
+.lrnr-main {
+  min-width: 0;
+  padding: 0 0 48px;
+}
+
+.lrnr-pad {
+  padding: 0 clamp(20px, 4vw, 44px);
+}
+
+@media (max-width: 860px) {
+  .lrnr-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .lrnr-rail {
+    position: static;
+    min-height: 0;
+    border-right: 0;
+    border-bottom: 2px solid var(--color-divider);
+  }
+
+  .lrnr-railnav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+  }
+
+  .lrnr-owner {
+    margin-top: 0;
+  }
+}

@@ -30,7 +30,7 @@ const SECTIONS: Array<{ id: SectionId; label: string }> = [
  * the visual language but are inert and labelled.
  */
 function Pending({ phase }: { phase: string }): JSX.Element {
-  return <span className="set-pending">{phase}</span>;
+  return <span className="m-pending">{phase}</span>;
 }
 
 function Row({
@@ -72,11 +72,11 @@ function Toggle({
       role="switch"
       aria-checked={checked}
       aria-label={label}
-      className="set-toggle"
+      className="m-toggle"
       disabled={disabled === true}
       onClick={() => onChange?.(!checked)}
     >
-      <span className="set-knob" />
+      <span className="m-knob" />
     </button>
   );
 }
@@ -135,11 +135,11 @@ export function SettingsView({
 
   return (
     <div className="settings-modernist">
-      <header className="set-header">
+      <header className="m-header">
         <div>
-          <p className="set-eyebrow">Workspace</p>
-          <h1 className="set-title">SETTINGS</h1>
-          <p className="set-subtitle text-muted">
+          <p className="m-eyebrow">Workspace</p>
+          <h1 className="m-title">SETTINGS</h1>
+          <p className="m-subtitle text-muted">
             How LRNR runs your university · single owner, this device
           </p>
         </div>
@@ -230,7 +230,7 @@ export function SettingsView({
                     <button
                       key={minutes}
                       type="button"
-                      className="set-seg"
+                      className="m-seg"
                       aria-pressed={draft.dailyMinutes === minutes}
                       onClick={() => {
                         setDraft((current) => ({
@@ -294,7 +294,7 @@ export function SettingsView({
                     <button
                       key={label}
                       type="button"
-                      className="set-seg"
+                      className="m-seg"
                       aria-pressed={false}
                       disabled
                     >
@@ -341,7 +341,7 @@ export function SettingsView({
                     <button
                       key={label}
                       type="button"
-                      className="set-seg"
+                      className="m-seg"
                       aria-pressed={false}
                       disabled
                     >
@@ -414,21 +414,21 @@ export function SettingsView({
 
       {isErasing ? (
         <div
-          className="set-dialog-backdrop"
+          className="m-dialog-backdrop"
           role="dialog"
           aria-modal="true"
           aria-labelledby="erase-title"
         >
-          <div className="set-dialog">
-            <h2 className="set-dialog-title" id="erase-title">
+          <div className="m-dialog">
+            <h2 className="m-dialog-title" id="erase-title">
               Erase this workspace?
             </h2>
-            <p className="set-dialog-body">
+            <p className="m-dialog-body">
               This would delete your entire university — every mastered concept,
               your path, and every note and probe — permanently. Workspace erase
               is not implemented in Phase 1, so nothing will be deleted.
             </p>
-            <div className="set-dialog-actions">
+            <div className="m-dialog-actions">
               <button
                 type="button"
                 className="btn btn-secondary"

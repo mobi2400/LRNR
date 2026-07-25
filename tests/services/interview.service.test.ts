@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import {
+  createInMemoryInterviewRepository,
+  type InterviewRepository,
+} from '@/db/interview.repo';
 import { MemoryKeyValueStore } from '@/lib/redis';
 import { createGuestLink } from '@/server/guest-link';
-import { getInterviewReaction } from '@/server/interview-reaction';
-import { listVerdictLog } from '@/server/verdict-log';
 import {
   createInterviewService,
   InterviewForbiddenError,
@@ -11,17 +13,22 @@ import {
 } from '@/services/interview.service';
 
 describe('interview service', () => {
-  let store: MemoryKeyValueStore;
+  let repository: InterviewRepository;
+  let tokenStore: MemoryKeyValueStore;
   let service: ReturnType<typeof createInterviewService>;
 
   beforeEach(() => {
-    store = new MemoryKeyValueStore();
+    repository = createInMemoryInterviewRepository();
+    tokenStore = new MemoryKeyValueStore();
     // null forces the deterministic (offline) judge, so no model is needed.
-    service = createInterviewService({ store, generate: null });
+    service = createInterviewService({ repository, tokenStore, generate: null });
   });
 
   it('redeems a valid guest link once', async () => {
-    const link = await createGuestLink({ topicSlug: 'system-design', store });
+    const link = await createGuestLink({
+      topicSlug: 'system-design',
+      store: tokenStore,
+    });
 
     expect(await service.redeem(link.token)).not.toBeNull();
     expect(await service.redeem(link.token)).toBeNull();
@@ -33,7 +40,6 @@ describe('interview service', () => {
     expect(session.status).toBe('awaiting_answer');
     expect(session.currentProbe).toBeTruthy();
 
-    // The same principal can answer it.
     const progress = await service.answer('guest-1', {
       sessionId: session.sessionId,
       answer: 'A read replica stops working when replication lag exceeds SLA.',
@@ -66,7 +72,7 @@ describe('interview service', () => {
       answer: 'Replication lag past the SLA breaks the replica.',
     });
 
-    const log = await listVerdictLog(store);
+    const log = await repository.listVerdictLog();
     expect(log).toHaveLength(1);
     expect(log[0]!.sessionId).toBe(session.sessionId);
     expect(log[0]!.principalUserId).toBe('guest-1');
@@ -82,7 +88,7 @@ describe('interview service', () => {
       answer: 'A first answer.',
     });
 
-    expect(await listVerdictLog(store)).toHaveLength(0);
+    expect(await repository.listVerdictLog()).toHaveLength(0);
   });
 
   it('forbids a different principal from answering', async () => {
@@ -149,7 +155,7 @@ describe('interview service', () => {
     });
     expect(reaction.recordedAt).toBeTruthy();
 
-    const stored = await getInterviewReaction(sessionId, store);
+    const stored = await repository.getReaction(sessionId);
     expect(stored!.wasAnythingWrong).toBe(true);
     expect(stored!.contact).toBeNull();
   });

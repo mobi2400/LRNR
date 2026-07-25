@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as RedisModule from '@/lib/redis';
+import type * as InterviewServiceModule from '@/services/interview.service';
 
 /**
  * Route-level integration harness (T10). Drives the real interview route
@@ -60,6 +61,22 @@ vi.mock('next/headers', () => ({
 }));
 
 vi.mock('@/server/auth', () => ({ auth: async () => null }));
+
+// Sessions/verdict-log/reactions live in Postgres in production; under test the
+// route singleton is rebuilt on the in-memory repository so no DB is needed.
+// Guest-link tokens still flow through the (mocked) Redis token store.
+vi.mock('@/services/interview.service', async (importOriginal) => {
+  const actual = await importOriginal<typeof InterviewServiceModule>();
+  const { createInMemoryInterviewRepository } = await import('@/db/interview.repo');
+
+  return {
+    ...actual,
+    interviewService: actual.createInterviewService({
+      repository: createInMemoryInterviewRepository(),
+      generate: null,
+    }),
+  };
+});
 
 // Imports must follow the mocks so the mocked modules are wired in.
 const { createGuestLink } = await import('@/server/guest-link');

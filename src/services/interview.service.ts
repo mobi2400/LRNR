@@ -4,17 +4,14 @@ import {
   type EvaluationGenerator,
   type InterviewProgress,
 } from '@/agents/evaluation/evaluation-agent';
+import {
+  interviewRepository,
+  type InterviewRepository,
+} from '@/db/interview.repo';
+import { appLogger } from '@/lib/logger';
 import { RedisKeyValueStore, type KeyValueStore } from '@/lib/redis';
 import { AppError } from '@/server/errors';
 import { redeemGuestLink, type GuestSession } from '@/server/guest-link';
-import {
-  deleteInterviewSession,
-  loadInterviewSession,
-  saveInterviewSession,
-} from '@/server/interview-store';
-import { appLogger } from '@/lib/logger';
-import { saveInterviewReaction } from '@/server/interview-reaction';
-import { appendVerdictLog } from '@/server/verdict-log';
 import { assertServerOnly } from '@/utils/server-only';
 import type {
   AnswerInterviewRequest,
@@ -27,21 +24,16 @@ assertServerOnly('src/services/interview.service.ts');
 
 /**
  * Orchestrates the interview across HTTP requests: redeem a guest link, start a
- * session, answer a turn. All persistence and turn logic is delegated (the
- * evaluation agent owns turns; the interview store owns durability). The service
- * adds the one thing neither can: binding each session to the principal who
- * started it, so a guest can never drive another principal's interview.
+ * session, answer a turn, read the verdict, capture a reaction. Turn logic is
+ * the evaluation agent's; durability is the interview repository's (Postgres in
+ * production, in-memory under test). Single-use guest link *tokens* remain in
+ * Redis — transient credentials, not records — so the redeem path still needs a
+ * KeyValueStore.
  */
 
-const OWNER_KEY_PREFIX = 'interview-owner:';
-const DEFAULT_OWNER_TTL_MS = 24 * 60 * 60 * 1000;
-
-function ownerKey(sessionId: string): string {
-  return `${OWNER_KEY_PREFIX}${sessionId}`;
-}
-
 export interface InterviewServiceDeps {
-  store?: KeyValueStore;
+  repository?: InterviewRepository;
+  tokenStore?: KeyValueStore;
   generate?: EvaluationGenerator;
 }
 
@@ -68,29 +60,32 @@ export class InterviewForbiddenError extends AppError {
 }
 
 export function createInterviewService(deps: InterviewServiceDeps = {}) {
-  const store = deps.store ?? new RedisKeyValueStore();
+  const repository = deps.repository ?? interviewRepository;
+  const tokenStore = deps.tokenStore ?? new RedisKeyValueStore();
   // undefined lets the agent pick real-vs-deterministic; null forces
   // deterministic; a function overrides. We forward whatever we were given.
   const generate = deps.generate;
 
-  async function bindOwner(sessionId: string, userId: string): Promise<void> {
-    await store.set(ownerKey(sessionId), userId, {
-      ttlMs: DEFAULT_OWNER_TTL_MS,
-    });
-  }
+  /**
+   * Loads a session and enforces per-principal ownership. Unknown sessions and
+   * sessions owned by another principal are surfaced as not-found / forbidden
+   * respectively — a guest can never touch another's interview.
+   */
+  async function loadOwned(
+    sessionId: string,
+    userId: string,
+  ): Promise<InterviewSessionState> {
+    const stored = await repository.getSession(sessionId);
 
-  async function assertOwner(sessionId: string, userId: string): Promise<void> {
-    const bound = await store.get(ownerKey(sessionId));
-
-    // An unbound session (owner record expired but state survives, or never
-    // bound) is treated as not found rather than silently accessible.
-    if (bound === null) {
+    if (stored === null) {
       throw new InterviewNotFoundError();
     }
 
-    if (bound !== userId) {
+    if (stored.principalUserId !== userId) {
       throw new InterviewForbiddenError();
     }
+
+    return stored.state;
   }
 
   return {
@@ -100,7 +95,7 @@ export function createInterviewService(deps: InterviewServiceDeps = {}) {
      * into a 404 rather than leaking which of those it was.
      */
     async redeem(token: string): Promise<GuestSession | null> {
-      return redeemGuestLink(token, store);
+      return redeemGuestLink(token, tokenStore);
     },
 
     async start(
@@ -115,47 +110,26 @@ export function createInterviewService(deps: InterviewServiceDeps = {}) {
         generate,
       );
 
-      await saveInterviewSession(state, { store });
-      await bindOwner(state.sessionId, userId);
+      await repository.createSession(state, userId);
 
       return state;
     },
 
-    /**
-     * Loads a session for its owner — the read behind the verdict screen.
-     * Enforces the same per-principal ownership as answering, so one guest can
-     * never read another's transcript or verdict.
-     */
     async get(
       userId: string,
       sessionId: string,
     ): Promise<InterviewSessionState> {
-      await assertOwner(sessionId, userId);
-
-      const state = await loadInterviewSession(sessionId, store);
-
-      if (state === null) {
-        throw new InterviewNotFoundError();
-      }
-
-      return state;
+      return loadOwned(sessionId, userId);
     },
 
     async answer(
       userId: string,
       input: AnswerInterviewRequest,
     ): Promise<InterviewProgress> {
-      await assertOwner(input.sessionId, userId);
-
-      const state = await loadInterviewSession(input.sessionId, store);
-
-      if (state === null) {
-        throw new InterviewNotFoundError();
-      }
-
+      const state = await loadOwned(input.sessionId, userId);
       const progress = await applyInterviewAnswer(state, input.answer, generate);
 
-      await saveInterviewSession(progress.state, { store });
+      await repository.updateSession(progress.state);
 
       // Log every completion — including no-verdict ones — for calibration.
       // A logging failure must never fail the interview turn itself.
@@ -164,18 +138,15 @@ export function createInterviewService(deps: InterviewServiceDeps = {}) {
         const unscoredTurns = turns.filter((turn) => turn.unscored).length;
 
         try {
-          await appendVerdictLog(
-            {
-              sessionId: progress.state.sessionId,
-              topicSlug: progress.state.topicSlug,
-              principalUserId: userId,
-              totalTurns: turns.length,
-              scoredTurns: turns.length - unscoredTurns,
-              unscoredTurns,
-              verdict: progress.verdict,
-            },
-            store,
-          );
+          await repository.appendVerdictLog({
+            sessionId: progress.state.sessionId,
+            topicSlug: progress.state.topicSlug,
+            principalUserId: userId,
+            totalTurns: turns.length,
+            scoredTurns: turns.length - unscoredTurns,
+            unscoredTurns,
+            verdict: progress.verdict,
+          });
         } catch (error) {
           appLogger.warn('interview.verdict_log_failed', {
             sessionId: progress.state.sessionId,
@@ -184,30 +155,19 @@ export function createInterviewService(deps: InterviewServiceDeps = {}) {
         }
       }
 
-      // Once completed, the owner binding is no longer needed; let it expire
-      // naturally with the session rather than deleting eagerly, so a repeated
-      // answer on a completed session still resolves to a frozen result.
       return progress;
     },
 
     /**
      * Records the interviewee's reaction to the verdict. Only valid once the
      * session has completed — there is no verdict to react to before then.
-     * Ownership is enforced so a reaction can only be attached to one's own
-     * session.
      */
     async recordReaction(
       userId: string,
       sessionId: string,
       input: InterviewReactionRequest,
     ) {
-      await assertOwner(sessionId, userId);
-
-      const state = await loadInterviewSession(sessionId, store);
-
-      if (state === null) {
-        throw new InterviewNotFoundError();
-      }
+      const state = await loadOwned(sessionId, userId);
 
       if (state.status !== 'completed') {
         throw new AppError({
@@ -217,22 +177,18 @@ export function createInterviewService(deps: InterviewServiceDeps = {}) {
         });
       }
 
-      return saveInterviewReaction(
-        {
-          sessionId,
-          principalUserId: userId,
-          wasAnythingWrong: input.wasAnythingWrong,
-          note: input.note ?? null,
-          contact: input.contact ?? null,
-        },
-        store,
-      );
+      return repository.saveReaction({
+        sessionId,
+        principalUserId: userId,
+        wasAnythingWrong: input.wasAnythingWrong,
+        note: input.note ?? null,
+        contact: input.contact ?? null,
+      });
     },
 
     async discard(userId: string, sessionId: string): Promise<void> {
-      await assertOwner(sessionId, userId);
-      await deleteInterviewSession(sessionId, store);
-      await store.delete(ownerKey(sessionId));
+      await loadOwned(sessionId, userId);
+      await repository.deleteSession(sessionId);
     },
   };
 }

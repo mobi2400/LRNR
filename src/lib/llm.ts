@@ -28,6 +28,88 @@ function withThinkingHeadroom(maxTokens: number): number {
   return Math.max(maxTokens, MIN_OUTPUT_TOKENS);
 }
 
+// ---------------------------------------------------------------------------
+// Degradation detection (T1)
+// ---------------------------------------------------------------------------
+
+export interface DegradationInfo {
+  degraded: boolean;
+  reason?:
+    | 'templated_fallback'
+    | 'empty_content'
+    | 'safety_blocked'
+    | 'recitation_blocked';
+  model?: string;
+  responseLength?: number;
+}
+
+export class LlmDegradedError extends Error {
+  readonly info: DegradationInfo;
+  constructor(label: string, info: DegradationInfo) {
+    super(`${label} returned degraded output: ${info.reason}`);
+    this.name = 'LlmDegradedError';
+    this.info = info;
+  }
+}
+
+const TEMPLATED_FALLBACK_PATTERNS = [
+  /^I(?:'m| am) (?:just )?(?:a |an )?(?:large )?language model/i,
+  /^As (?:a|an) (?:large )?language model/i,
+  /^I (?:cannot|can't|don't have (?:the ability|access))/i,
+  /^I'm (?:not able|unable) to/i,
+  /^Sorry, (?:but )?I (?:cannot|can't)/i,
+];
+
+export function detectDegradation(
+  content: string,
+  parsed: z.infer<typeof geminiResponseSchema>,
+  model: string,
+): DegradationInfo {
+  const finishReason = parsed.candidates[0]?.finishReason;
+
+  if (finishReason === 'SAFETY') {
+    return {
+      degraded: true,
+      reason: 'safety_blocked',
+      model,
+      responseLength: content.length,
+    };
+  }
+
+  if (finishReason === 'RECITATION') {
+    return {
+      degraded: true,
+      reason: 'recitation_blocked',
+      model,
+      responseLength: content.length,
+    };
+  }
+
+  const trimmed = content.trim();
+
+  if (trimmed.length === 0) {
+    return {
+      degraded: true,
+      reason: 'empty_content',
+      model,
+      responseLength: 0,
+    };
+  }
+
+  for (const pattern of TEMPLATED_FALLBACK_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      return {
+        degraded: true,
+        reason: 'templated_fallback',
+        model,
+        responseLength: trimmed.length,
+      };
+    }
+  }
+
+  return { degraded: false };
+}
+
 /**
  * One shared budget per process. Every provider request passes through it, so
  * tool-loop rounds and retries are paced too, not just top-level agent calls.
@@ -373,6 +455,11 @@ export async function generateStructured<TOutput>(
 
     assertUsableContent(content, parsed, input.label);
 
+    const degradation = detectDegradation(content, parsed, model);
+    if (degradation.degraded) {
+      throw new LlmDegradedError(input.label, degradation);
+    }
+
     const validated = input.schema.parse(parseJsonObject(content, input.label));
 
     await writeCachedCompletion(cacheKey, content);
@@ -431,6 +518,10 @@ export async function runToolAgent<TOutput>(
         const content = parts.map((part) => part.text ?? '').join('');
 
         if (content.trim().length > 0) {
+          const degradation = detectDegradation(content, parsed, model);
+          if (degradation.degraded) {
+            throw new LlmDegradedError(input.label, degradation);
+          }
           return input.schema.parse(parseJsonObject(content, input.label));
         }
 
@@ -488,6 +579,11 @@ export async function runToolAgent<TOutput>(
       .join('');
 
     assertUsableContent(finalContent, finalParsed, input.label);
+
+    const finalDegradation = detectDegradation(finalContent, finalParsed, model);
+    if (finalDegradation.degraded) {
+      throw new LlmDegradedError(input.label, finalDegradation);
+    }
 
     return input.schema.parse(parseJsonObject(finalContent, input.label));
   } finally {

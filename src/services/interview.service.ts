@@ -117,6 +117,26 @@ export function createInterviewService(deps: InterviewServiceDeps = {}) {
       return state;
     },
 
+    /**
+     * Loads a session for its owner — the read behind the verdict screen.
+     * Enforces the same per-principal ownership as answering, so one guest can
+     * never read another's transcript or verdict.
+     */
+    async get(
+      userId: string,
+      sessionId: string,
+    ): Promise<InterviewSessionState> {
+      await assertOwner(sessionId, userId);
+
+      const state = await loadInterviewSession(sessionId, store);
+
+      if (state === null) {
+        throw new InterviewNotFoundError();
+      }
+
+      return state;
+    },
+
     async answer(
       userId: string,
       input: AnswerInterviewRequest,

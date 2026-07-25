@@ -74,6 +74,29 @@ describe('interview service', () => {
     ).rejects.toBeInstanceOf(InterviewNotFoundError);
   });
 
+  it('gets a session for its owner including the verdict', async () => {
+    const session = await service.start('guest-1', {
+      topicSlug: 'system-design',
+      turnCap: 1,
+    });
+    await service.answer('guest-1', {
+      sessionId: session.sessionId,
+      answer: 'Replication lag past the SLA breaks the replica.',
+    });
+
+    const loaded = await service.get('guest-1', session.sessionId);
+    expect(loaded.status).toBe('completed');
+    expect(loaded.verdictSummary).not.toBeNull();
+  });
+
+  it('forbids a different principal from reading a session', async () => {
+    const session = await service.start('guest-1', { topicSlug: 'system-design' });
+
+    await expect(
+      service.get('guest-2', session.sessionId),
+    ).rejects.toBeInstanceOf(InterviewForbiddenError);
+  });
+
   it('discards a session so it can no longer be answered', async () => {
     const session = await service.start('guest-1', { topicSlug: 'system-design' });
     await service.discard('guest-1', session.sessionId);

@@ -1,74 +1,98 @@
-import { describe, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { MemoryKeyValueStore } from '@/lib/redis';
+import {
+  createGuestLink,
+  GUEST_SCOPE,
+  redeemGuestLink,
+} from '@/server/guest-link';
 
 /**
- * Guest link test skeletons — critical path 3: guest escalation.
+ * Guest link tests — critical path 3: guest escalation.
  *
- * A guest principal must reach interview routes and nothing else.
- * These tests define the security boundary. Every owner route that
- * calls assertUnlockedOwnerSession must reject a guest principal.
- *
- * Import pattern (uncomment when T3 lands):
- *   import { createGuestLink, redeemGuestLink } from '@/server/guest-link';
- *   import { assertUnlockedOwnerSession } from '@/server/session-state';
+ * The token lifecycle (create / single-use / expiry / unguessable) is unit
+ * tested here against an in-memory store. The escalation-boundary cases (guest
+ * reaches interview routes, 403 on every owner route, RAG isolation) assert
+ * behavior of routes that do not exist yet, so they remain it.todo until the
+ * interview API lands.
  */
 
 describe('guest link — token lifecycle', () => {
-  it.todo(
-    'creates a guest session from a valid single-use link',
-    // createGuestLink returns a token. redeemGuestLink with that
-    // token returns a scoped session with isOwner=false and a
-    // short TTL.
-  );
+  let store: MemoryKeyValueStore;
 
-  it.todo(
-    'rejects a used link',
-    // After one successful redeem, a second redeem with the same
-    // token must throw or return null. Single-use enforced.
-  );
+  beforeEach(() => {
+    store = new MemoryKeyValueStore();
+  });
 
-  it.todo(
-    'rejects an expired link',
-    // Create a link, advance time past TTL, attempt redeem.
-    // Must throw or return null.
-  );
+  it('creates a guest session from a valid single-use link', async () => {
+    const link = await createGuestLink({ topicSlug: 'system-design', store });
+    expect(link.token).toBeTruthy();
 
-  it.todo(
-    'rejects a token that does not exist',
-    // Random UUID as token → must throw or return null.
-    // Token must be unguessable (UUID v4 or equivalent entropy).
-  );
+    const session = await redeemGuestLink(link.token, store);
+
+    expect(session).not.toBeNull();
+    expect(session!.isOwner).toBe(false);
+    expect(session!.scope).toBe(GUEST_SCOPE);
+    expect(session!.topicSlug).toBe('system-design');
+    expect(new Date(session!.expiresAt).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('scopes each guest to a distinct, isolated userId', async () => {
+    const a = await createGuestLink({ store });
+    const b = await createGuestLink({ store });
+
+    const sessionA = await redeemGuestLink(a.token, store);
+    const sessionB = await redeemGuestLink(b.token, store);
+
+    expect(sessionA!.guestUserId).not.toBe(sessionB!.guestUserId);
+  });
+
+  it('rejects a used link', async () => {
+    const link = await createGuestLink({ store });
+
+    expect(await redeemGuestLink(link.token, store)).not.toBeNull();
+    expect(await redeemGuestLink(link.token, store)).toBeNull();
+  });
+
+  it('rejects an expired link', async () => {
+    vi.useFakeTimers();
+    try {
+      const link = await createGuestLink({ linkTtlMs: 1_000, store });
+
+      vi.advanceTimersByTime(1_001);
+
+      expect(await redeemGuestLink(link.token, store)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rejects a token that does not exist', async () => {
+    expect(
+      await redeemGuestLink('550e8400-e29b-41d4-a716-446655440000', store),
+    ).toBeNull();
+  });
+
+  it('rejects a malformed (non-UUID) token', async () => {
+    expect(await redeemGuestLink('not-a-real-token', store)).toBeNull();
+  });
+
+  it('yields at most one session for concurrent redeems', async () => {
+    const link = await createGuestLink({ store });
+
+    const [first, second] = await Promise.all([
+      redeemGuestLink(link.token, store),
+      redeemGuestLink(link.token, store),
+    ]);
+
+    const successes = [first, second].filter((s) => s !== null);
+    expect(successes).toHaveLength(1);
+  });
 });
 
 describe('guest link — escalation boundary', () => {
-  it.todo(
-    'guest principal reaches interview start route',
-    // POST /api/interview/start with a guest session must succeed.
-  );
-
-  it.todo(
-    'guest principal reaches interview answer route',
-    // POST /api/interview/answer with a guest session must succeed.
-  );
-
-  it.todo(
-    'guest principal gets 403 on every owner route',
-    // For each route that calls assertUnlockedOwnerSession:
-    //   - POST /api/onboarding/start
-    //   - POST /api/onboarding/reply
-    //   - POST /api/workflows/phase1/prepare
-    //   - GET  /api/dashboard
-    //   - POST /api/lesson/[sessionId]/ask-follow-up
-    //   - ... (enumerate all)
-    // A guest session must receive 403 FORBIDDEN.
-    // This is the regression suite: if a new owner route is added
-    // without the gate, this test must be updated to cover it.
-  );
-
-  it.todo(
-    'guest principal cannot access another user RAG memory',
-    // A guest session scoped to interview must not be able to
-    // retrieve RAG context belonging to the owner or any other
-    // user. rag-search.tool.ts:55-65 scopes by actor.userId;
-    // verify the guest userId is distinct and isolated.
-  );
+  it.todo('guest principal reaches interview start route');
+  it.todo('guest principal reaches interview answer route');
+  it.todo('guest principal gets 403 on every owner route');
+  it.todo('guest principal cannot access another user RAG memory');
 });

@@ -44,6 +44,26 @@ export const interviewVerdictSchema = z.object({
 });
 export type InterviewVerdict = z.infer<typeof interviewVerdictSchema>;
 
+// ── API request contracts ─────────────────────────────────────────────────────
+
+export const redeemGuestLinkRequestSchema = z.object({
+  token: z.string().uuid(),
+});
+export type RedeemGuestLinkRequest = z.infer<typeof redeemGuestLinkRequestSchema>;
+
+export const startInterviewRequestSchema = z.object({
+  topicSlug: z.string().trim().min(1).max(255),
+  turnCap: z.number().int().positive().max(20).optional(),
+});
+export type StartInterviewRequest = z.infer<typeof startInterviewRequestSchema>;
+
+export const answerInterviewRequestSchema = z.object({
+  sessionId: z.string().uuid(),
+  // Empty string is allowed: it records a deliberate skip.
+  answer: z.string().max(20_000),
+});
+export type AnswerInterviewRequest = z.infer<typeof answerInterviewRequestSchema>;
+
 export const interviewSessionStateSchema = z.object({
   sessionId: z.string().uuid(),
   topicSlug: z.string().min(1),

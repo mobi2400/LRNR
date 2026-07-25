@@ -64,6 +64,27 @@ export const answerInterviewRequestSchema = z.object({
 });
 export type AnswerInterviewRequest = z.infer<typeof answerInterviewRequestSchema>;
 
+export const interviewReactionRequestSchema = z.object({
+  // The one question the verdict screen asks: "was any of this wrong?"
+  wasAnythingWrong: z.boolean(),
+  note: z.string().trim().max(4000).optional(),
+  // Optional way to reach an unattended interviewee for follow-up.
+  contact: z.string().trim().max(320).optional(),
+});
+export type InterviewReactionRequest = z.infer<
+  typeof interviewReactionRequestSchema
+>;
+
+export const interviewReactionSchema = z.object({
+  sessionId: z.string().uuid(),
+  principalUserId: z.string().min(1),
+  wasAnythingWrong: z.boolean(),
+  note: z.string().nullable(),
+  contact: z.string().nullable(),
+  recordedAt: z.string().datetime(),
+});
+export type InterviewReaction = z.infer<typeof interviewReactionSchema>;
+
 export const interviewSessionStateSchema = z.object({
   sessionId: z.string().uuid(),
   topicSlug: z.string().min(1),

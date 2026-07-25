@@ -13,10 +13,12 @@ import {
   saveInterviewSession,
 } from '@/server/interview-store';
 import { appLogger } from '@/lib/logger';
+import { saveInterviewReaction } from '@/server/interview-reaction';
 import { appendVerdictLog } from '@/server/verdict-log';
 import { assertServerOnly } from '@/utils/server-only';
 import type {
   AnswerInterviewRequest,
+  InterviewReactionRequest,
   InterviewSessionState,
   StartInterviewRequest,
 } from '@/schemas/evaluation.schema';
@@ -186,6 +188,45 @@ export function createInterviewService(deps: InterviewServiceDeps = {}) {
       // naturally with the session rather than deleting eagerly, so a repeated
       // answer on a completed session still resolves to a frozen result.
       return progress;
+    },
+
+    /**
+     * Records the interviewee's reaction to the verdict. Only valid once the
+     * session has completed — there is no verdict to react to before then.
+     * Ownership is enforced so a reaction can only be attached to one's own
+     * session.
+     */
+    async recordReaction(
+      userId: string,
+      sessionId: string,
+      input: InterviewReactionRequest,
+    ) {
+      await assertOwner(sessionId, userId);
+
+      const state = await loadInterviewSession(sessionId, store);
+
+      if (state === null) {
+        throw new InterviewNotFoundError();
+      }
+
+      if (state.status !== 'completed') {
+        throw new AppError({
+          code: 'CONFLICT',
+          message: 'A reaction can only be recorded after the verdict.',
+          status: 409,
+        });
+      }
+
+      return saveInterviewReaction(
+        {
+          sessionId,
+          principalUserId: userId,
+          wasAnythingWrong: input.wasAnythingWrong,
+          note: input.note ?? null,
+          contact: input.contact ?? null,
+        },
+        store,
+      );
     },
 
     async discard(userId: string, sessionId: string): Promise<void> {

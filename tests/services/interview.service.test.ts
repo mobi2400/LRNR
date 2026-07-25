@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { MemoryKeyValueStore } from '@/lib/redis';
 import { createGuestLink } from '@/server/guest-link';
+import { getInterviewReaction } from '@/server/interview-reaction';
 import { listVerdictLog } from '@/server/verdict-log';
 import {
   createInterviewService,
@@ -124,6 +125,53 @@ describe('interview service', () => {
 
     await expect(
       service.get('guest-2', session.sessionId),
+    ).rejects.toBeInstanceOf(InterviewForbiddenError);
+  });
+
+  async function completeSession(userId = 'guest-1') {
+    const session = await service.start(userId, {
+      topicSlug: 'system-design',
+      turnCap: 1,
+    });
+    await service.answer(userId, {
+      sessionId: session.sessionId,
+      answer: 'Replication lag past the SLA breaks the replica.',
+    });
+    return session.sessionId;
+  }
+
+  it('records an interviewee reaction after the verdict', async () => {
+    const sessionId = await completeSession();
+
+    const reaction = await service.recordReaction('guest-1', sessionId, {
+      wasAnythingWrong: true,
+      note: 'The gap about replication lag was actually covered.',
+    });
+    expect(reaction.recordedAt).toBeTruthy();
+
+    const stored = await getInterviewReaction(sessionId, store);
+    expect(stored!.wasAnythingWrong).toBe(true);
+    expect(stored!.contact).toBeNull();
+  });
+
+  it('rejects a reaction before the interview completes', async () => {
+    const session = await service.start('guest-1', {
+      topicSlug: 'system-design',
+      turnCap: 3,
+    });
+
+    await expect(
+      service.recordReaction('guest-1', session.sessionId, {
+        wasAnythingWrong: false,
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+
+  it('forbids a different principal from recording a reaction', async () => {
+    const sessionId = await completeSession();
+
+    await expect(
+      service.recordReaction('guest-2', sessionId, { wasAnythingWrong: false }),
     ).rejects.toBeInstanceOf(InterviewForbiddenError);
   });
 

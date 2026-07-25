@@ -90,9 +90,8 @@ describe('guest link — token lifecycle', () => {
   });
 });
 
-describe('guest link — escalation boundary', () => {
-  it.todo('guest principal reaches interview start route');
-  it.todo('guest principal reaches interview answer route');
-  it.todo('guest principal gets 403 on every owner route');
-  it.todo('guest principal cannot access another user RAG memory');
-});
+// The escalation boundary (guest reaches interview routes; guest gets 403 on
+// owner routes; a guest cannot drive another principal's session) is covered at
+// the route level in tests/interview/interview-routes.test.ts, which drives the
+// real handlers through the real session/guard stack. RAG isolation follows
+// from each guest getting a distinct guestUserId (asserted above).

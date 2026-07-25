@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { MemoryKeyValueStore } from '@/lib/redis';
 import { createGuestLink } from '@/server/guest-link';
+import { listVerdictLog } from '@/server/verdict-log';
 import {
   createInterviewService,
   InterviewForbiddenError,
@@ -52,6 +53,35 @@ describe('interview service', () => {
     expect(progress.completed).toBe(true);
     expect(progress.state.status).toBe('completed');
     expect(progress.verdict).not.toBeNull();
+  });
+
+  it('writes a verdict-log entry on completion', async () => {
+    const session = await service.start('guest-1', {
+      topicSlug: 'system-design',
+      turnCap: 1,
+    });
+    await service.answer('guest-1', {
+      sessionId: session.sessionId,
+      answer: 'Replication lag past the SLA breaks the replica.',
+    });
+
+    const log = await listVerdictLog(store);
+    expect(log).toHaveLength(1);
+    expect(log[0]!.sessionId).toBe(session.sessionId);
+    expect(log[0]!.principalUserId).toBe('guest-1');
+  });
+
+  it('does not log until the interview completes', async () => {
+    const session = await service.start('guest-1', {
+      topicSlug: 'system-design',
+      turnCap: 3,
+    });
+    await service.answer('guest-1', {
+      sessionId: session.sessionId,
+      answer: 'A first answer.',
+    });
+
+    expect(await listVerdictLog(store)).toHaveLength(0);
   });
 
   it('forbids a different principal from answering', async () => {

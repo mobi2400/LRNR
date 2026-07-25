@@ -12,6 +12,8 @@ import {
   loadInterviewSession,
   saveInterviewSession,
 } from '@/server/interview-store';
+import { appLogger } from '@/lib/logger';
+import { appendVerdictLog } from '@/server/verdict-log';
 import { assertServerOnly } from '@/utils/server-only';
 import type {
   AnswerInterviewRequest,
@@ -152,6 +154,33 @@ export function createInterviewService(deps: InterviewServiceDeps = {}) {
       const progress = await applyInterviewAnswer(state, input.answer, generate);
 
       await saveInterviewSession(progress.state, { store });
+
+      // Log every completion — including no-verdict ones — for calibration.
+      // A logging failure must never fail the interview turn itself.
+      if (progress.completed) {
+        const turns = progress.state.turns;
+        const unscoredTurns = turns.filter((turn) => turn.unscored).length;
+
+        try {
+          await appendVerdictLog(
+            {
+              sessionId: progress.state.sessionId,
+              topicSlug: progress.state.topicSlug,
+              principalUserId: userId,
+              totalTurns: turns.length,
+              scoredTurns: turns.length - unscoredTurns,
+              unscoredTurns,
+              verdict: progress.verdict,
+            },
+            store,
+          );
+        } catch (error) {
+          appLogger.warn('interview.verdict_log_failed', {
+            sessionId: progress.state.sessionId,
+            error: error instanceof Error ? error.message : 'unknown',
+          });
+        }
+      }
 
       // Once completed, the owner binding is no longer needed; let it expire
       // naturally with the session rather than deleting eagerly, so a repeated

@@ -128,15 +128,11 @@ async function answerN(
   return progress;
 }
 
-// ── Critical path 1: Judge leniency (real model semantics) ────────────────────
-
-describe('evaluation agent — judge calibration', () => {
-  it.todo('never praises a confidently wrong answer');
-  it.todo('names the specific missing element in a partial answer');
-  it.todo('cites a source for every gap finding');
-  it.todo('grades a Hinglish answer on knowledge not language');
-  it.todo('does not invent a citation when rag_search returns empty evidence');
-});
+// Critical path 1 (judge calibration — never praises a wrong answer, names the
+// missing element, cites a source, grades Hinglish on knowledge, never
+// fabricates a citation) lives in judge-calibration.test.ts against the golden
+// set: an always-run no-fabrication guarantee plus a real-model harness gated by
+// RUN_JUDGE_CALIBRATION.
 
 // ── Critical path 2: Degradation / unscored turns ─────────────────────────────
 

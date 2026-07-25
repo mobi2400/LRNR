@@ -1,14 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+import {
+  applyInterviewAnswer,
+  createInterviewSession,
+  type EvaluationGenerator,
+  type InterviewProgress,
+} from '@/agents/evaluation/evaluation-agent';
+import { LlmDegradedError } from '@/lib/llm';
+import type { StructuredGenerationInput } from '@/lib/llm';
 
 /**
- * Evaluation agent test skeletons — the spec the implementation must satisfy.
+ * Evaluation agent tests — the spec the implementation must satisfy.
  *
- * Each it.todo() becomes a real test as T1-T11 land. The fixtures below are
- * the golden inputs; the assertions are the contract.
- *
- * Import pattern (uncomment when the agent exists):
- *   import { createInterviewSession, applyInterviewAnswer, type EvaluationGenerator }
- *     from '@/agents/evaluation/evaluation-agent';
+ * The judge is driven through the injected generator seam (same pattern as
+ * architect-agent.test.ts:62), so these run deterministically without a model.
+ * Judge-calibration cases that assert real model semantics remain it.todo until
+ * the golden set lands.
  */
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -22,12 +29,6 @@ const PARTIAL_ANSWER_REPLICA =
   "I'd add a read replica because it's easier and it spreads the read load " +
   'across more machines.';
 
-const CORRECT_ANSWER_HINGLISH =
-  'Replication lag tab hota hai jab write load zyada ho jaata hai. ' +
-  'Read replica eventually consistent hota hai, toh agar lag badh gaya ' +
-  'toh stale reads milenge. Signal yeh hai ki replica lag monitoring ' +
-  'mein spike aaye aur application-level consistency guarantee break ho.';
-
 const CORRECT_ANSWER_ENGLISH =
   'A read replica stops working when replication lag exceeds the ' +
   "application's consistency requirements. The signal is replica lag " +
@@ -35,124 +36,239 @@ const CORRECT_ANSWER_ENGLISH =
 
 const SKIP_ANSWER = '';
 
-// ── Critical path 1: Judge leniency ──────────────────────────────────────────
+// ── Generator harness ─────────────────────────────────────────────────────────
+
+interface ScriptedJudgment {
+  verdict?: string | null;
+  gapFindings?: unknown[];
+  unscored?: boolean;
+  pressDeeper?: boolean;
+  nextProbe?: string | null;
+}
+
+/**
+ * Builds a generator keyed by the call's `label`, so a test can script the
+ * opening probe, each turn's judgment, and the final verdict independently.
+ * A judgment supplied as an Error is thrown — the way a degraded model surfaces.
+ */
+function scriptedGenerator(script: {
+  opening?: string;
+  judgments?: Array<ScriptedJudgment | Error>;
+  verdict?: Record<string, unknown> | Error;
+}): { generate: EvaluationGenerator; calls: string[] } {
+  const judgments = [...(script.judgments ?? [])];
+  const calls: string[] = [];
+
+  const generate = (async <TOutput>(
+    input: StructuredGenerationInput<TOutput>,
+  ): Promise<TOutput> => {
+    calls.push(input.label);
+
+    if (input.label === 'evaluation_opening_probe') {
+      return { probe: script.opening ?? 'Opening probe?' } as TOutput;
+    }
+
+    if (input.label === 'evaluation_turn_judgment') {
+      const next = judgments.shift();
+      if (next instanceof Error) {
+        throw next;
+      }
+      return {
+        verdict: next?.verdict ?? 'Working understanding.',
+        gapFindings: next?.gapFindings ?? [],
+        unscored: next?.unscored ?? false,
+        pressDeeper: next?.pressDeeper ?? false,
+        nextProbe: next?.nextProbe ?? null,
+      } as TOutput;
+    }
+
+    if (input.label === 'evaluation_verdict') {
+      if (script.verdict instanceof Error) {
+        throw script.verdict;
+      }
+      return (script.verdict ?? {
+        headline: 'Solid grasp overall.',
+        gaps: [],
+        masteryGrid: { canSolve: true, canExplain: true, canDecide: false },
+        partialCoverage: null,
+      }) as TOutput;
+    }
+
+    throw new Error(`unexpected generator label: ${input.label}`);
+  }) as EvaluationGenerator;
+
+  return { generate, calls };
+}
+
+const degraded = () =>
+  new LlmDegradedError('evaluation_turn_judgment', {
+    degraded: true,
+    reason: 'templated_fallback',
+  });
+
+async function answerN(
+  turnCap: number,
+  answers: string[],
+  script: Parameters<typeof scriptedGenerator>[0],
+) {
+  const { generate } = scriptedGenerator(script);
+  let progress: InterviewProgress = {
+    state: await createInterviewSession(
+      { topicSlug: 'system-design', turnCap, firstProbe: 'First probe?' },
+      generate,
+    ),
+    completed: false,
+    verdict: null,
+  };
+
+  for (const answer of answers) {
+    progress = await applyInterviewAnswer(progress.state, answer, generate);
+  }
+
+  return progress;
+}
+
+// ── Critical path 1: Judge leniency (real model semantics) ────────────────────
 
 describe('evaluation agent — judge calibration', () => {
-  it.todo(
-    'never praises a confidently wrong answer',
-    // Fixture: WRONG_ANSWER_CONFIDENT — confuses password hashing with
-    // consistent hashing for load balancing. Judge must find at least one
-    // gap finding. If it praises this, the product has failed.
-  );
-
-  it.todo(
-    'names the specific missing element in a partial answer',
-    // Fixture: PARTIAL_ANSWER_REPLICA — mentions replicas but not
-    // replication lag. Gap finding must mention "replication lag" or
-    // equivalent concept. The claim must be specific, not generic.
-  );
-
-  it.todo(
-    'cites a source for every gap finding',
-    // No gap finding in the verdict may have an empty sourceUri.
-    // The gapFindingSchema enforces z.string().url() but the judge
-    // must actually provide one — a fabricated "https://example.com"
-    // is a test failure too if we can detect it.
-  );
-
-  it.todo(
-    'grades a Hinglish answer on knowledge not language',
-    // Fixture: CORRECT_ANSWER_HINGLISH — technically correct, mixed
-    // Hindi-English. Judge must grade as correct (no gap finding for
-    // the concept being tested). Design decision 11: "grade technical
-    // knowledge, not English proficiency."
-  );
-
-  it.todo(
-    'does not invent a citation when rag_search returns empty evidence',
-    // When retrieval returns { evidence: [] }, the judge must not
-    // fabricate a source URI. The turn should be marked unscored
-    // rather than grounded against nothing.
-  );
+  it.todo('never praises a confidently wrong answer');
+  it.todo('names the specific missing element in a partial answer');
+  it.todo('cites a source for every gap finding');
+  it.todo('grades a Hinglish answer on knowledge not language');
+  it.todo('does not invent a citation when rag_search returns empty evidence');
 });
 
-// ── Critical path 2: Degradation / unscored turns ────────────────────────────
+// ── Critical path 2: Degradation / unscored turns ─────────────────────────────
 
 describe('evaluation agent — degradation and unscored turns', () => {
-  it.todo(
-    'marks a turn unscored when the model returns degraded output',
-    // Depends on T1 (degradation detection). The generator mock
-    // returns a degraded/templated response; the turn must have
-    // unscored=true and no gap findings.
-  );
+  it('marks a turn unscored when the model returns degraded output', async () => {
+    const progress = await answerN(5, [WRONG_ANSWER_CONFIDENT], {
+      judgments: [degraded()],
+    });
 
-  it.todo(
-    'continues the interview after an unscored turn',
-    // After an unscored turn, the next probe must appear. The
-    // session status stays 'awaiting_answer', not 'completed'.
-  );
+    const turn = progress.state.turns[0]!;
+    expect(turn.unscored).toBe(true);
+    expect(turn.gapFindings).toHaveLength(0);
+    expect(turn.verdict).toBeNull();
+  });
 
-  it.todo(
-    'produces a partial verdict when some turns are unscored',
-    // 3 of 5 turns scored. Verdict must include partialCoverage
-    // string like "based on 3 of 5 answers" and only grade the
-    // scored turns.
-  );
+  it('continues the interview after an unscored turn', async () => {
+    const progress = await answerN(5, [WRONG_ANSWER_CONFIDENT], {
+      judgments: [degraded()],
+    });
 
-  it.todo(
-    'produces no verdict when all turns are unscored',
-    // All 5 turns unscored. verdictSummary must be null. The UI
-    // shows "we couldn't evaluate this session" — not a fabricated
-    // verdict.
-  );
+    expect(progress.completed).toBe(false);
+    expect(progress.state.status).toBe('awaiting_answer');
+    expect(progress.state.currentProbe).toBeTruthy();
+  });
 
-  it.todo(
-    'never emits a fabricated verdict',
-    // On model error during verdict synthesis, verdictSummary must
-    // be null. The session completes with status 'completed' but
-    // no verdict, rather than a hallucinated one.
-  );
+  it('produces a partial verdict when some turns are unscored', async () => {
+    const progress = await answerN(
+      3,
+      [CORRECT_ANSWER_ENGLISH, CORRECT_ANSWER_ENGLISH, WRONG_ANSWER_CONFIDENT],
+      {
+        judgments: [{}, {}, degraded()],
+        verdict: {
+          headline: 'Partial evaluation.',
+          gaps: [],
+          masteryGrid: { canSolve: true, canExplain: true, canDecide: false },
+          partialCoverage: null,
+        },
+      },
+    );
+
+    expect(progress.completed).toBe(true);
+    expect(progress.verdict).not.toBeNull();
+    expect(progress.verdict!.partialCoverage).toBe('based on 2 of 3 answers');
+  });
+
+  it('produces no verdict when all turns are unscored', async () => {
+    const progress = await answerN(
+      2,
+      [WRONG_ANSWER_CONFIDENT, WRONG_ANSWER_CONFIDENT],
+      { judgments: [degraded(), degraded()] },
+    );
+
+    expect(progress.completed).toBe(true);
+    expect(progress.state.verdictSummary).toBeNull();
+  });
+
+  it('never emits a fabricated verdict on synthesis error', async () => {
+    const progress = await answerN(
+      2,
+      [CORRECT_ANSWER_ENGLISH, CORRECT_ANSWER_ENGLISH],
+      { judgments: [{}, {}], verdict: new Error('model down') },
+    );
+
+    expect(progress.completed).toBe(true);
+    expect(progress.state.status).toBe('completed');
+    expect(progress.state.verdictSummary).toBeNull();
+  });
 });
 
-// ── Turn loop mechanics ──────────────────────────────────────────────────────
+// ── Turn loop mechanics ───────────────────────────────────────────────────────
 
 describe('evaluation agent — turn loop', () => {
-  it.todo(
-    'completes after the turn cap',
-    // 5-turn interview. After turn 5, status must be 'completed'
-    // and a verdict must be present (assuming scored turns exist).
-  );
+  it('completes after the turn cap', async () => {
+    const progress = await answerN(
+      3,
+      [CORRECT_ANSWER_ENGLISH, CORRECT_ANSWER_ENGLISH, CORRECT_ANSWER_ENGLISH],
+      { judgments: [{}, {}, {}] },
+    );
 
-  it.todo(
-    'records a skip as a blank answer with skipped=true',
-    // Fixture: SKIP_ANSWER (empty string). Turn must have
-    // skipped=true, answer='', and the judge treats it as
-    // "did not attempt."
-  );
+    expect(progress.state.status).toBe('completed');
+    expect(progress.verdict).not.toBeNull();
+  });
 
-  it.todo(
-    'does not allow editing a submitted answer',
-    // After applyInterviewAnswer succeeds for turn N, a second
-    // call for the same turnIndex must throw or return the
-    // existing turn unchanged. Design decision 8: "No."
-  );
+  it('records a skip as a blank answer with skipped=true', async () => {
+    const { generate } = scriptedGenerator({ judgments: [{}] });
+    const state = await createInterviewSession(
+      { topicSlug: 'system-design', turnCap: 5, firstProbe: 'First probe?' },
+      generate,
+    );
+    const progress = await applyInterviewAnswer(state, SKIP_ANSWER, generate);
 
-  it.todo(
-    'logs startedAt and answeredAt per turn',
-    // Every turn must have startedAt (when the probe was presented)
-    // and answeredAt (when the answer was submitted). Design
-    // decision 9: no visible timer, but log elapsed.
-  );
+    const turn = progress.state.turns[0]!;
+    expect(turn.skipped).toBe(true);
+    expect(turn.answer).toBe('');
+  });
 
-  it.todo(
-    'presses deeper on a weak answer',
-    // Fixture: PARTIAL_ANSWER_REPLICA. The follow-up probe must
-    // address the same area (replicas/replication), not move on.
-  );
+  it('does not allow editing a completed session', async () => {
+    const done = await answerN(1, [CORRECT_ANSWER_ENGLISH], {
+      judgments: [{}],
+    });
+    expect(done.completed).toBe(true);
 
-  it.todo(
-    'moves on after a strong answer',
-    // Fixture: CORRECT_ANSWER_ENGLISH. The next probe must cover
-    // a different concept, not re-ask the same area.
-  );
+    const { generate } = scriptedGenerator({ judgments: [{}] });
+    const again = await applyInterviewAnswer(done.state, 'a different answer', generate);
+
+    expect(again.state.turns).toHaveLength(1);
+    expect(again.state.turns[0]!.answer).toBe(CORRECT_ANSWER_ENGLISH);
+  });
+
+  it('logs startedAt and answeredAt per turn', async () => {
+    const progress = await answerN(5, [CORRECT_ANSWER_ENGLISH], {
+      judgments: [{}],
+    });
+
+    const turn = progress.state.turns[0]!;
+    expect(turn.startedAt).toBeTruthy();
+    expect(turn.answeredAt).toBeTruthy();
+  });
+
+  it('presses deeper on a weak answer', async () => {
+    const progress = await answerN(5, [PARTIAL_ANSWER_REPLICA], {
+      judgments: [{ pressDeeper: true, nextProbe: 'What exactly is replication lag?' }],
+    });
+
+    expect(progress.state.currentProbe).toBe('What exactly is replication lag?');
+  });
+
+  it('moves on after a strong answer', async () => {
+    const progress = await answerN(5, [CORRECT_ANSWER_ENGLISH], {
+      judgments: [{ pressDeeper: false, nextProbe: 'Now, a different concept entirely.' }],
+    });
+
+    expect(progress.state.currentProbe).toBe('Now, a different concept entirely.');
+  });
 });

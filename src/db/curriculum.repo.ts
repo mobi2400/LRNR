@@ -73,6 +73,13 @@ const lessonCompletionUpdateSchema = z.object({
   nextSessionIndex: z.number().int().min(0),
 });
 
+const appendSessionsSchema = z.object({
+  expectedRevision: z.number().int().positive(),
+  newSessions: z.array(curriculumSessionDocumentSchema).min(1),
+  currentSessionId: z.string().trim().min(1),
+  currentSessionIndex: z.number().int().min(0),
+});
+
 export type CurriculumStateRecord = z.infer<typeof curriculumStateRecordSchema>;
 export type UpsertCurriculumStateInput = z.infer<
   typeof upsertCurriculumStateInputSchema
@@ -472,6 +479,70 @@ export function createCurriculumRepository(database: DbClient = db) {
 
       return parseCurriculumRow(row);
     },
+    /**
+     * Appends reinforcement sessions to the live path and moves the pointer to
+     * the first of them, under optimistic revision control. This is the "keep
+     * going until mastery" write: the plan grows to close evaluated gaps instead
+     * of ending at the last planned session.
+     */
+    async appendSessionsAndSetPointer(
+      actor: DbActor,
+      topicSlug: string,
+      input: z.infer<typeof appendSessionsSchema>,
+    ): Promise<CurriculumStateRecord> {
+      const validatedActor = assertDbActor(actor);
+      const validatedTopicSlug = z.string().trim().min(1).parse(topicSlug);
+      const validatedInput = appendSessionsSchema.parse(input);
+      const currentState = requireRow(
+        await this.getActiveCurriculum(validatedActor, validatedTopicSlug),
+        'Active curriculum not found for the current topic.',
+        { topicSlug: validatedTopicSlug },
+      );
+
+      if (currentState.revision !== validatedInput.expectedRevision) {
+        throw new AppError({
+          code: 'CONFLICT',
+          message: 'Curriculum changed before reinforcement sessions could be added.',
+          status: 409,
+          details: {
+            expectedRevision: validatedInput.expectedRevision,
+            actualRevision: currentState.revision,
+          },
+        });
+      }
+
+      const parsedSessions = parseSessionDocuments(currentState.layer2Sessions);
+      const nextSessions = [...parsedSessions, ...validatedInput.newSessions];
+      const [row] = await database
+        .update(curriculumState)
+        .set({
+          layer2Sessions: nextSessions,
+          currentSessionId: validatedInput.currentSessionId,
+          currentSessionIndex: validatedInput.currentSessionIndex,
+          revision: currentState.revision + 1,
+          ...buildUpdatedAtPatch(),
+        })
+        .where(
+          and(
+            eq(curriculumState.id, currentState.id),
+            eq(curriculumState.userId, validatedActor.userId),
+            eq(curriculumState.revision, validatedInput.expectedRevision),
+          ),
+        )
+        .returning();
+
+      if (row === undefined) {
+        throw new AppError({
+          code: 'CONFLICT',
+          message: 'Curriculum revision conflict while adding reinforcement sessions.',
+          status: 409,
+          details: { expectedRevision: validatedInput.expectedRevision },
+        });
+      }
+
+      return parseCurriculumRow(row);
+    },
+
     async updateCurrentSessionPointer(
       actor: DbActor,
       topicSlug: string,

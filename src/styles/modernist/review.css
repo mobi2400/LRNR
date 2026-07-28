@@ -9,6 +9,79 @@
   padding: 0 clamp(20px, 4vw, 44px);
 }
 
+/* — mastery check (owner evaluation flow) — */
+.review-modernist .mastery-check {
+  max-width: 720px;
+  padding: 8px clamp(20px, 4vw, 44px) 48px;
+}
+
+.review-modernist .mastery-check-lead {
+  font-size: 17px;
+  line-height: 1.6;
+  margin: 0 0 10px;
+}
+
+.review-modernist .mastery-check-note {
+  font-size: 13px;
+  margin: 0 0 20px;
+}
+
+.review-modernist .mastery-check-probe-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.review-modernist .mastery-check-probe,
+.review-modernist .mastery-check-headline {
+  font-size: 22px;
+  line-height: 1.25;
+  margin: 0 0 18px;
+}
+
+.review-modernist .mastery-check-answer {
+  width: 100%;
+  border: 2px solid var(--color-divider);
+  border-radius: 10px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  padding: 14px 16px;
+  resize: vertical;
+}
+
+.review-modernist .mastery-check-answer:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.review-modernist .mastery-check-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.review-modernist .mastery-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 20px;
+}
+
+.review-modernist .mastery-grid span {
+  border: 2px solid var(--color-divider);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.review-modernist .mastery-grid span[data-met='true'] {
+  border-color: #1a7f37;
+  color: #1a7f37;
+}
+
 .review-modernist .review-main {
   padding: 30px 40px 40px 0;
   max-width: 760px;

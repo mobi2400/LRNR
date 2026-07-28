@@ -11,7 +11,9 @@ import {
 import { appLogger } from '@/lib/logger';
 import { RedisKeyValueStore, type KeyValueStore } from '@/lib/redis';
 import { AppError } from '@/server/errors';
+import { serverConfig } from '@/server/config';
 import { redeemGuestLink, type GuestSession } from '@/server/guest-link';
+import { masteryProgressionService } from '@/services/mastery-progression.service';
 import { assertServerOnly } from '@/utils/server-only';
 import type {
   AnswerInterviewRequest,
@@ -152,6 +154,29 @@ export function createInterviewService(deps: InterviewServiceDeps = {}) {
             sessionId: progress.state.sessionId,
             error: error instanceof Error ? error.message : 'unknown',
           });
+        }
+
+        // When the owner completes an evaluation for their current topic, feed
+        // the verdict into the mastery loop: master the goal or grow the path.
+        // A guest interview (any non-owner principal) never touches a curriculum.
+        // This must never fail the interview turn, so it is best-effort.
+        if (progress.verdict !== null && userId === serverConfig.owner.userId) {
+          try {
+            const outcome = await masteryProgressionService.applyEvaluationVerdict(
+              { userId, requestId: 'interview-progression' },
+              { topicSlug: progress.state.topicSlug, verdict: progress.verdict },
+            );
+
+            appLogger.info('interview.progression_applied', {
+              sessionId: progress.state.sessionId,
+              status: outcome.status,
+            });
+          } catch (error) {
+            appLogger.warn('interview.progression_failed', {
+              sessionId: progress.state.sessionId,
+              error: error instanceof Error ? error.message : 'unknown',
+            });
+          }
         }
       }
 

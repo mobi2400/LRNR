@@ -4,10 +4,17 @@ import { z } from 'zod';
 
 import { generateStructured, type StructuredGenerationInput } from '@/lib/llm';
 import { appLogger } from '@/lib/logger';
+import {
+  MAX_TOTAL_SESSIONS,
+  canReinforce,
+  reinforcementRoundsFor,
+  type MasterySummary,
+} from '@/lib/mastery';
 import { serverConfig } from '@/server/config';
 import type { TopicBriefRecord } from '@/db/topic-briefs.repo';
 import type { TopicKnowledgeBaseRecord } from '@/db/knowledge.repo';
 import type { ProfileRecord } from '@/db/profile.repo';
+import type { GapFinding } from '@/schemas/evaluation.schema';
 import {
   curriculumSessionSchema,
   layer1RoadmapSchema,
@@ -443,4 +450,150 @@ export async function buildInitialCurriculumPlan(
     currentSessionIndex: 0,
     nextEvaluationDueAt: calculateFirstEvaluationDueAt(),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Curriculum extension — the "keep going until mastery" step
+// ---------------------------------------------------------------------------
+
+export interface CurriculumExtensionInput {
+  existingSessions: CurriculumSession[];
+  gaps: GapFinding[];
+  masterySummary: MasterySummary;
+  topic: { title: string; goal: string; topicSlug: string; requiredDepth: string };
+}
+
+export interface CurriculumExtensionResult {
+  /** Reinforcement sessions to append (status 'planned'). Empty if nothing to do. */
+  newSessions: CurriculumSession[];
+  /** Mastery summary with reinforcement rounds incremented for reinforced concepts. */
+  masterySummary: MasterySummary;
+  /** Concept slugs a reinforcement session was created for. */
+  reinforcedConcepts: string[];
+  /** True if a cap (total sessions, or per-concept rounds) stopped further reinforcement. */
+  capped: boolean;
+}
+
+/** A short human label from a gap's claim, for the session title. */
+function gapLabel(claim: string): string {
+  const words = claim.replace(/\s+/g, ' ').trim().split(' ').slice(0, 8).join(' ');
+
+  return truncate(words.replace(/[.:;]+$/, ''), 200);
+}
+
+/**
+ * De-duplicates gaps to one entry per concept, keeping the first citation. Gaps
+ * carry no concept slug, so we derive a stable one from the claim.
+ */
+function distinctGaps(gaps: GapFinding[]): Array<{ slug: string; gap: GapFinding }> {
+  const seen = new Set<string>();
+  const result: Array<{ slug: string; gap: GapFinding }> = [];
+
+  for (const gap of gaps) {
+    const slug = slugify(gapLabel(gap.claim));
+
+    if (seen.has(slug)) {
+      continue;
+    }
+
+    seen.add(slug);
+    result.push({ slug, gap });
+  }
+
+  return result;
+}
+
+function buildReinforcementSession(
+  slug: string,
+  gap: GapFinding,
+  dayNumber: number,
+  topic: CurriculumExtensionInput['topic'],
+): CurriculumSession {
+  const label = gapLabel(gap.claim);
+
+  return curriculumSessionSchema.parse({
+    id: randomUUID(),
+    dayNumber,
+    title: truncate(`Reinforce: ${label}`, 255),
+    status: 'planned',
+    phase: 'review',
+    conceptsToCover: [truncate(slug, 255)],
+    prerequisites: [],
+    masteryObjective: truncate(
+      `Close the gap the evaluation found: ${gap.claim}`,
+      1000,
+    ),
+    mentalModel: truncate(
+      `This gap is what stands between you and ${topic.goal}. Rebuild the idea from the evidence, do not re-read the old lesson.`,
+      1200,
+    ),
+    explanationPlan: [
+      truncate(`Name precisely what was missing: ${gap.claim}`, 1000),
+      truncate(`Ground the correction in the cited evidence: ${gap.evidence}`, 1000),
+      'Re-derive the idea from first principles, then apply it once.',
+    ],
+    examplesPlan: [
+      truncate(`Work one concrete ${topic.topicSlug} example that exercises this exact point.`, 1000),
+    ],
+    reviewQuestions: [
+      truncate(`Explain in your own words what you previously got wrong about: ${label}.`, 1000),
+      'Where would this bite you in a real system, and how would you avoid it?',
+    ],
+    sourceRefs: [gap.sourceUri],
+    connectionToPrior: 'Targets a specific gap the evaluation surfaced.',
+    tomorrowPreview: null,
+    evaluationDue: true,
+  });
+}
+
+/**
+ * Turns an evaluation verdict's cited gaps into grounded reinforcement sessions,
+ * bounded by the safety caps. Deterministic and grounded: each session cites the
+ * gap's own evidence, so extension never invents material. Returns an empty plan
+ * (and capped=true) when caps are hit, which the caller reads as "stop and report
+ * what is still open" rather than looping.
+ */
+export function extendCurriculumFromGaps(
+  input: CurriculumExtensionInput,
+): CurriculumExtensionResult {
+  const summary: MasterySummary = {
+    goalMastered: input.masterySummary.goalMastered,
+    concepts: { ...input.masterySummary.concepts },
+  };
+  const newSessions: CurriculumSession[] = [];
+  const reinforcedConcepts: string[] = [];
+  let capped = false;
+
+  const maxDay = input.existingSessions.reduce(
+    (max, session) => Math.max(max, session.dayNumber),
+    0,
+  );
+  let total = input.existingSessions.length;
+  const nowIso = new Date().toISOString();
+
+  for (const { slug, gap } of distinctGaps(input.gaps)) {
+    if (total >= MAX_TOTAL_SESSIONS) {
+      capped = true;
+      break;
+    }
+
+    if (!canReinforce(summary, slug)) {
+      // This concept has already been reinforced to the per-concept cap.
+      capped = true;
+      continue;
+    }
+
+    newSessions.push(
+      buildReinforcementSession(slug, gap, maxDay + newSessions.length + 1, input.topic),
+    );
+    total += 1;
+    reinforcedConcepts.push(slug);
+    summary.concepts[slug] = {
+      level: 'developing',
+      reinforcementRounds: reinforcementRoundsFor(summary, slug) + 1,
+      lastAssessedAt: nowIso,
+    };
+  }
+
+  return { newSessions, masterySummary: summary, reinforcedConcepts, capped };
 }

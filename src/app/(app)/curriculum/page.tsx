@@ -14,7 +14,10 @@ import {
   getMetadataUserId,
   toMetaText,
 } from '@/server/page-metadata';
-import { getCurriculumMap } from '@/services/curriculum.service';
+import {
+  getCurriculumMap,
+  getPathProgression,
+} from '@/services/curriculum.service';
 
 const loadCurriculum = cache(async (userId: string) =>
   getCurriculumMap({ userId, requestId: 'curriculum-page' }),
@@ -67,12 +70,22 @@ export default async function CurriculumPage(): Promise<JSX.Element> {
 
   assertUnlockedOwnerSession(state);
 
-  const curriculum = await loadCurriculum(state.userId);
+  const [curriculum, progression] = await Promise.all([
+    loadCurriculum(state.userId),
+    getPathProgression({ userId: state.userId, requestId: 'curriculum-page' }),
+  ]);
   const completedCount = curriculum.sessions.filter(
     (session) => session.status === 'completed',
   ).length;
   const hasCurriculum =
     curriculum.topicSlug !== null && curriculum.sessions.length > 0;
+  const isFallbackGrounding = curriculum.roadmap?.grounding === 'fallback';
+  const allSessionsComplete =
+    hasCurriculum && completedCount === curriculum.sessions.length;
+  // The path is complete on demonstrated mastery. Until then, finishing the
+  // planned sessions opens the mastery check rather than a silent dead-end.
+  const showMasteryComplete = progression.goalMastered;
+  const showEvaluationGate = allSessionsComplete && !progression.goalMastered;
 
   return (
     <AppShell
@@ -114,6 +127,37 @@ export default async function CurriculumPage(): Promise<JSX.Element> {
             </div>
           ) : null}
         </header>
+
+        {showMasteryComplete ? (
+          <div className="path-mastery-note path-mastery-note--done" role="status">
+            <strong>Goal mastered.</strong> You cleared the mastery bar for this
+            goal with no open gaps, so the path is complete — you learned to
+            mastery, not to a fixed number of days.
+          </div>
+        ) : null}
+
+        {showEvaluationGate ? (
+          <div className="path-mastery-note" role="status">
+            <strong>Planned sessions done.</strong> A short mastery check now
+            decides whether you&rsquo;ve got the goal or need targeted
+            reinforcement — the path keeps going until you have it.
+            <div className="path-mastery-actions">
+              <Link className="btn btn-primary" href="/lesson/evaluate">
+                Take the mastery check →
+              </Link>
+            </div>
+          </div>
+        ) : null}
+
+        {hasCurriculum && isFallbackGrounding ? (
+          <div className="path-grounding-note" role="status">
+            <strong>Grounding limited.</strong> This path was built from LRNR&rsquo;s
+            offline scaffold, not live research — so the sessions are generic
+            rather than tailored to your goal. It usually means the research model
+            was unavailable when the path was planned (often a rate limit). Re-plan
+            the topic once the model is reachable to get a grounded path.
+          </div>
+        ) : null}
 
         {hasCurriculum ? (
           <PathMap

@@ -185,6 +185,38 @@
   margin-top: 8px;
 }
 
+.lesson-modernist .lesson-complete {
+  margin-top: 16px;
+}
+
+/* Both actions in the card share the modernist block-button look: left-aligned,
+   flat, sized to sit on one line in the 264px rail. */
+.lesson-modernist .lesson-side-card .btn-block {
+  font-size: 13.5px;
+  letter-spacing: -0.01em;
+  padding: 12px 14px;
+}
+
+.lesson-modernist .lesson-complete-msg {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-text);
+  border-left: 3px solid var(--color-divider);
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
+}
+
+.lesson-modernist .lesson-complete-msg--success {
+  border-left-color: #1a7f37;
+  background: color-mix(in srgb, #1a7f37 12%, transparent);
+}
+
+.lesson-modernist .lesson-complete-msg--error {
+  border-left-color: var(--color-accent);
+  background: var(--color-accent-100);
+}
+
 .lesson-modernist .lesson-side-block {
   margin-top: 22px;
 }

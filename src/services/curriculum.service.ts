@@ -1,6 +1,7 @@
 import { curriculumRepository } from '@/db/curriculum.repo';
 import { RedisKeyValueStore } from '@/lib/redis';
 import { appLogger } from '@/lib/logger';
+import { readMasterySummary } from '@/lib/mastery';
 import { knowledgeRepository } from '@/db/knowledge.repo';
 import { profileRepository } from '@/db/profile.repo';
 import { type DbActor, requireRow } from '@/db/repository-helpers';
@@ -85,6 +86,32 @@ export const curriculumMapSessionProjectionSchema = curriculumSessionSchema.pick
   phase: true,
   conceptsToCover: true,
 });
+
+export interface PathProgression {
+  /** The learner has demonstrated mastery of the goal — the path is complete. */
+  goalMastered: boolean;
+}
+
+/**
+ * Reads the mastery-loop state off the profile. Deliberately not cached: mastery
+ * lives on the profile and changes without a curriculum revision bump, so the
+ * curriculum-map cache must not gate it.
+ */
+export async function getPathProgression(
+  actor: DbActor,
+): Promise<PathProgression> {
+  const profile = await profileRepository.getCurrentProfile(actor);
+
+  if (profile === null) {
+    return { goalMastered: false };
+  }
+
+  const summary = readMasterySummary(
+    (profile.stableMasterySummary as Record<string, unknown>).progression,
+  );
+
+  return { goalMastered: summary.goalMastered };
+}
 
 export async function getCurriculumMap(
   actor: DbActor,

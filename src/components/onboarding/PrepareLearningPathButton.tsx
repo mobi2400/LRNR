@@ -2,11 +2,16 @@
 
 import { useState, useTransition } from 'react';
 
+import { useRouter } from 'next/navigation';
+
+import { NAV_START_EVENT } from '@/components/nav/NavigationProgress';
+
 type PreparationEnvelope =
   | { ok: true; data: { lessonReady: true } }
   | { ok: false; error: { message: string } };
 
 export function PrepareLearningPathButton(): React.JSX.Element {
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -27,7 +32,8 @@ export function PrepareLearningPathButton(): React.JSX.Element {
             throw new Error(envelope.error.message);
           }
 
-          window.location.assign('/lesson/current');
+          window.dispatchEvent(new Event(NAV_START_EVENT));
+          router.push('/lesson/current');
         } catch (nextError) {
           setError(
             nextError instanceof Error

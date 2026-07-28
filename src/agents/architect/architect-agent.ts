@@ -157,16 +157,62 @@ function toSlug(value: string): string {
   );
 }
 
+/**
+ * Strips learner framing ("I want to master…", "how to…") off a raw goal so the
+ * deterministic fallback can talk about the actual subject. This is a heuristic,
+ * not understanding — the LLM blueprint is what produces a real concept map; this
+ * only keeps the offline/fallback plan topic-shaped instead of literally
+ * "mental model / core workflow".
+ */
+function deriveTopicLabel(goal: string): string {
+  const cleaned = goal
+    .toLowerCase()
+    .replace(
+      /\b(i\s+(?:want|would like|wanna|need|wish)\s+to|i'?m\s+trying\s+to|please|help\s+me|teach\s+me|how\s+to|the\s+basics\s+of|get(?:ting)?\s+good\s+at|become\s+(?:a|an)?|learn(?:ing)?|master(?:ing)?|understand(?:ing)?|study(?:ing)?|about)\b/g,
+      ' ',
+    )
+    .replace(/[^a-z0-9+#.\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return cleaned.length > 0 ? cleaned : 'this topic';
+}
+
+/**
+ * A goal-shaped fallback concept outline. Ordered fundamentals → internals →
+ * practice → pitfalls → tradeoffs, so an offline plan at least sequences real
+ * learning stages for the actual subject.
+ */
+function goalShapedConcepts(topic: string): string[] {
+  return [
+    `${topic} fundamentals`,
+    `how ${topic} works under the hood`,
+    `${topic} in practice`,
+    `common ${topic} mistakes`,
+    `${topic} tradeoffs and scaling`,
+  ];
+}
+
 function findTopicProfile(goal: string) {
-  return (
-    topicProfiles.find((profile) => profile.match.test(goal)) ?? {
-      title: toSentenceCase(goal).slice(0, 255),
-      prerequisites: ['core vocabulary', 'working examples', 'practice routine'],
-      concepts: ['mental model', 'core workflow', 'common mistakes', 'practice plan'],
-      probeQuestion:
-        'Walk me through how you currently think this topic works. Where does the process feel clear, and where does it still feel fuzzy?',
-    }
-  );
+  const matched = topicProfiles.find((profile) => profile.match.test(goal));
+
+  if (matched !== undefined) {
+    return matched;
+  }
+
+  const topic = deriveTopicLabel(goal);
+
+  return {
+    title: toSentenceCase(topic).slice(0, 255),
+    prerequisites: [
+      `${topic} core vocabulary`,
+      'foundational examples',
+      'a small hands-on practice routine',
+    ],
+    concepts: goalShapedConcepts(topic),
+    probeQuestion:
+      'Walk me through how you currently think this topic works. Where does the process feel clear, and where does it still feel fuzzy?',
+  };
 }
 
 /** The deterministic interview: a fixed, kind-ordered question sequence. */
@@ -306,22 +352,74 @@ const firstQuestionSchema = z.object({
   kind: lenientQuestionKindSchema,
 });
 
+/**
+ * The model is asked for a depth enum but sometimes returns a phrase
+ * ("intermediate-to-advanced", "medium"). Rejecting the turn over the label
+ * discarded a whole grounded blueprint, so an unrecognized depth degrades to
+ * 'intermediate' instead of failing.
+ */
+const lenientDepthSchema = z.unknown().transform((value): PreferredDepth => {
+  const parsed = preferredDepthSchema.safeParse(
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  );
+
+  return parsed.success ? parsed.data : 'intermediate';
+});
+
+/** Pulls a usable label out of a string, or an object the model wrapped it in. */
+function readLabel(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>;
+
+    for (const key of ['title', 'name', 'concept', 'slug', 'label', 'value', 'text']) {
+      const candidate = record[key];
+
+      if (typeof candidate === 'string' && candidate.trim().length > 0) {
+        return candidate.trim();
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Concept and prerequisite lists are meant to be strings, but the model often
+ * returns arrays of objects ({ "concept": "..." }). Coerce each item to its
+ * label rather than failing the whole parse.
+ */
+const lenientStringList = z
+  .array(z.unknown())
+  .transform((values) =>
+    values.map(readLabel).filter((item): item is string => item !== null),
+  );
+
 const turnDecisionSchema = z.object({
-  inferredBackground: z.array(z.string().trim().min(1)).default([]),
-  strengths: z.array(z.string().trim().min(1)).default([]),
-  weakAreas: z.array(z.string().trim().min(1)).default([]),
-  misconceptions: z.array(z.string().trim().min(1)).default([]),
-  tags: z.array(z.string().trim().min(1)).default([]),
+  inferredBackground: lenientStringList.default([]),
+  strengths: lenientStringList.default([]),
+  weakAreas: lenientStringList.default([]),
+  misconceptions: lenientStringList.default([]),
+  tags: lenientStringList.default([]),
   complete: z.boolean(),
-  nextQuestion: firstQuestionSchema.nullable().default(null),
+  nextQuestion: firstQuestionSchema.nullable().catch(null).default(null),
+  // A malformed blueprint must not sink the turn — signals and completion still
+  // apply, and the dedicated blueprint pass (or the goal-shaped fallback) fills
+  // in a usable roadmap.
   blueprint: z
     .object({
       title: z.string().trim().min(1),
-      requiredDepth: preferredDepthSchema,
-      prerequisiteMap: z.array(z.string().trim().min(1)).default([]),
-      conceptOutline: z.array(z.string().trim().min(1)).default([]),
+      requiredDepth: lenientDepthSchema,
+      prerequisiteMap: lenientStringList.default([]),
+      conceptOutline: lenientStringList.default([]),
     })
     .nullable()
+    .catch(null)
     .default(null),
   motivation: z.string().trim().min(1).nullable().default(null),
   priorAttempts: z.string().trim().min(1).nullable().default(null),
@@ -375,10 +473,13 @@ Ask the single best opening discovery question. Return { "question": "...", "kin
 
 const blueprintSchema = z.object({
   title: z.string().trim().min(1),
-  requiredDepth: preferredDepthSchema,
-  prerequisiteMap: z.array(z.string().trim().min(1)).min(1),
-  conceptOutline: z.array(z.string().trim().min(1)).min(3),
-  recommendedSources: z.array(z.string().trim().min(1)).default([]),
+  requiredDepth: lenientDepthSchema,
+  // Same object-vs-string tolerance as the turn schema, but this dedicated pass
+  // still requires enough grounded material to be worth using; too little falls
+  // back to the goal-shaped deterministic blueprint.
+  prerequisiteMap: lenientStringList.pipe(z.array(z.string().min(1)).min(1)),
+  conceptOutline: lenientStringList.pipe(z.array(z.string().min(1)).min(3)),
+  recommendedSources: lenientStringList.default([]),
 });
 
 /**

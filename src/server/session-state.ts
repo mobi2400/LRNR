@@ -1,6 +1,7 @@
 import { readUnlockToken } from '@/server/access-secret';
 import { serverConfig } from '@/server/config';
 import { AppError } from '@/server/errors';
+import { GUEST_SCOPE, type GuestScope } from '@/server/guest-link';
 import { assertOwnerIdentity } from '@/server/owner';
 import { assertServerOnly } from '@/utils/server-only';
 
@@ -13,6 +14,13 @@ export interface SessionSnapshot {
   email: string | null;
   displayName: string | null;
   isOwner: boolean;
+  /**
+   * A redeemed guest is authenticated (it has a userId) but is not the owner.
+   * Keeping it a real authenticated principal is what makes owner guards return
+   * 403 FORBIDDEN for a guest rather than a 401 that reads as "just log in".
+   */
+  isGuest?: boolean;
+  guestScope?: GuestScope | null;
 }
 
 export interface SessionAccessState {
@@ -21,6 +29,8 @@ export interface SessionAccessState {
   displayName: string | null;
   isAuthenticated: boolean;
   isOwner: boolean;
+  isGuest: boolean;
+  guestScope: GuestScope | null;
   isUnlocked: boolean;
   unlockedUntil: string | null;
   accessMode: AccessMode;
@@ -88,6 +98,8 @@ export function buildSessionAccessState(
     displayName: session.displayName,
     isAuthenticated,
     isOwner: session.isOwner,
+    isGuest: session.isGuest ?? false,
+    guestScope: session.guestScope ?? null,
     isUnlocked: unlockedUntil !== null,
     unlockedUntil,
     accessMode: serverConfig.accessMode,
@@ -139,5 +151,34 @@ export function assertUnlockedOwnerSession(
       'Unlock LRNR with the private access secret first.',
     );
   }
+}
+
+/**
+ * The interview is the one surface a non-owner can reach. Access is granted to
+ * an unlocked owner (who can run their own evaluations) or to a guest whose
+ * signed cookie is scoped to the interview. Everyone else is rejected. A guest
+ * that lands on any *owner* route still hits assertUnlockedOwnerSession, which
+ * throws FORBIDDEN because the guest is authenticated but not the owner.
+ */
+export function assertInterviewSession(
+  state: SessionAccessState,
+): asserts state is SessionAccessState & { userId: string } {
+  if (state.isOwner) {
+    assertUnlockedOwnerSession(state);
+    return;
+  }
+
+  if (
+    state.isGuest &&
+    state.guestScope === GUEST_SCOPE &&
+    state.userId !== null
+  ) {
+    return;
+  }
+
+  throw new SessionAccessError(
+    'FORBIDDEN',
+    'This route requires an active interview session.',
+  );
 }
 

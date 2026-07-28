@@ -102,6 +102,8 @@ describe('initial curriculum builder', () => {
     expect(plan.sessions[0]?.examplesPlan.length).toBeGreaterThan(0);
     expect(plan.sessions[0]?.reviewQuestions.length).toBeGreaterThan(0);
     expect(plan.sessions[2]?.evaluationDue).toBe(true);
+    // No generator (offline/test) → deterministic scaffold, flagged as fallback.
+    expect(plan.roadmap.grounding).toBe('fallback');
   });
 
   it('uses the injected model to design grounded sessions', async () => {
@@ -154,6 +156,8 @@ describe('initial curriculum builder', () => {
     expect(plan.sessions[0]?.masteryObjective).toContain('call a tool');
     // Designed prose replaces the templated "Define X" scaffolding.
     expect(plan.sessions[0]?.explanationPlan[0]).not.toMatch(/^Define /);
+    // Model designed every concept → grounded.
+    expect(plan.roadmap.grounding).toBe('model');
   });
 
   it('falls back to the deterministic plan when the model design is incomplete', async () => {
@@ -181,5 +185,7 @@ describe('initial curriculum builder', () => {
     // Deterministic fallback still produces all three sessions.
     expect(plan.sessions).toHaveLength(3);
     expect(plan.sessions[0]?.title).toContain('Tool use');
+    // A partial model design that forced the fallback is flagged as such.
+    expect(plan.roadmap.grounding).toBe('fallback');
   });
 });

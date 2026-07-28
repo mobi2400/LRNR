@@ -60,24 +60,26 @@ export function CompleteLessonButton({
   }
 
   return (
-    <div className="cockpit-stack">
+    <div className="lesson-complete">
       <button
-        className="workspace-button"
+        className="btn btn-primary btn-block"
         type="button"
         onClick={completeLesson}
         disabled={isPending}
         aria-busy={isPending}
       >
-        {isPending ? 'Completing lesson...' : 'Mark lesson complete'}
+        {isPending ? 'Completing lesson…' : 'Mark lesson complete'}
       </button>
       <div aria-live="polite">
         {message === null ? null : (
-          <p className="cockpit-feedback cockpit-feedback--success">
+          <p className="lesson-complete-msg lesson-complete-msg--success">
             {message}
           </p>
         )}
         {error === null ? null : (
-          <p className="cockpit-feedback cockpit-feedback--error">{error}</p>
+          <p className="lesson-complete-msg lesson-complete-msg--error">
+            {error}
+          </p>
         )}
       </div>
     </div>

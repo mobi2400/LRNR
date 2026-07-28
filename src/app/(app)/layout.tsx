@@ -2,6 +2,8 @@ import type { JSX, ReactNode } from 'react';
 
 import { redirect } from 'next/navigation';
 
+import { NavigationProgress } from '@/components/nav/NavigationProgress';
+import { RouteTransition } from '@/components/nav/RouteTransition';
 import { getSessionAccessState } from '@/server/session';
 
 type AppLayoutProps = Readonly<{
@@ -23,5 +25,10 @@ export default async function AppLayout({ children }: AppLayoutProps): Promise<J
     redirect('/unlock');
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <NavigationProgress />
+      <RouteTransition>{children}</RouteTransition>
+    </>
+  );
 }

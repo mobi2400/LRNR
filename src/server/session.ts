@@ -7,6 +7,12 @@ import {
 } from '@/server/access-secret';
 import { auth } from '@/server/auth';
 import {
+  createGuestJwt,
+  LRNR_GUEST_COOKIE_NAME,
+  readGuestJwt,
+} from '@/server/guest-session-cookie';
+import type { GuestSession } from '@/server/guest-link';
+import {
   createLocalOwnerJwt,
   getLocalOwnerUserId,
   LOCAL_JWT_COOKIE_NAME,
@@ -53,15 +59,65 @@ export async function getSessionAccessState(): Promise<SessionAccessState> {
     );
   }
 
+  const authUserId = session?.user?.id ?? null;
+
+  // A signed-in owner/user always wins over any guest cookie that may also be
+  // present. The guest principal only applies when nobody else is authenticated.
+  if (authUserId === null) {
+    const guest = readGuestJwt(
+      cookieStore.get(LRNR_GUEST_COOKIE_NAME)?.value ?? null,
+    );
+
+    if (guest !== null) {
+      return buildSessionAccessState(
+        {
+          userId: guest.sub,
+          email: null,
+          displayName: 'Interview guest',
+          isOwner: false,
+          isGuest: true,
+          guestScope: guest.scope,
+        },
+        null,
+      );
+    }
+  }
+
   return buildSessionAccessState(
     {
-      userId: session?.user?.id ?? null,
+      userId: authUserId,
       email: session?.user?.email ?? null,
       displayName: session?.user?.name ?? null,
       isOwner: session?.isOwner === true,
     },
     unlockCookie,
   );
+}
+
+/**
+ * Persists a redeemed guest link as a signed, session-scoped cookie. Its expiry
+ * tracks the guest session so the cookie cannot outlive the underlying link.
+ */
+export async function setGuestSessionCookie(
+  guestSession: GuestSession,
+): Promise<void> {
+  const cookieStore = await cookies();
+
+  cookieStore.set({
+    name: LRNR_GUEST_COOKIE_NAME,
+    value: createGuestJwt(guestSession),
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: serverConfig.nodeEnv === 'production',
+    path: '/',
+    expires: new Date(guestSession.expiresAt),
+  });
+}
+
+export async function clearGuestSessionCookie(): Promise<void> {
+  const cookieStore = await cookies();
+
+  cookieStore.delete(LRNR_GUEST_COOKIE_NAME);
 }
 export async function createLocalOwnerSession(): Promise<void> {
   const cookieStore = await cookies();
@@ -132,6 +188,7 @@ export async function clearSessionCookies(): Promise<void> {
 
   cookieStore.delete(LRNR_UNLOCK_COOKIE_NAME);
   cookieStore.delete(LOCAL_JWT_COOKIE_NAME);
+  cookieStore.delete(LRNR_GUEST_COOKIE_NAME);
 
   for (const cookieName of AUTH_COOKIE_NAMES) {
     cookieStore.delete(cookieName);
@@ -140,6 +197,7 @@ export async function clearSessionCookies(): Promise<void> {
 
 export {
   assertAuthenticatedSession,
+  assertInterviewSession,
   assertOwnerSession,
   assertUnlockedOwnerSession,
   buildSessionAccessState,

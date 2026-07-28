@@ -252,6 +252,47 @@
   margin: 0;
 }
 
+/* — grounding warning (offline/fallback plan) — */
+.path-modernist .path-grounding-note {
+  margin: 0 clamp(20px, 4vw, 44px) 20px;
+  padding: 14px 16px;
+  border: 2px solid var(--color-accent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  color: var(--color-text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.path-modernist .path-grounding-note strong {
+  color: var(--color-accent);
+}
+
+/* — mastery loop notes (evaluation gate / goal complete) — */
+.path-modernist .path-mastery-note {
+  margin: 0 clamp(20px, 4vw, 44px) 20px;
+  padding: 16px 18px;
+  border: 2px solid var(--color-text);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.path-modernist .path-mastery-note--done {
+  border-color: #1a7f37;
+  background: color-mix(in srgb, #1a7f37 8%, transparent);
+}
+
+.path-modernist .path-mastery-note--done strong {
+  color: #1a7f37;
+}
+
+.path-modernist .path-mastery-actions {
+  margin-top: 14px;
+}
+
 /* — empty — */
 .path-modernist .path-empty {
   padding: 40px clamp(20px, 4vw, 44px) 56px;

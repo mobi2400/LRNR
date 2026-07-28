@@ -1217,7 +1217,6 @@ button:disabled,
 }
 
 .lesson-diagram {
-  overflow-x: auto;
   border: 1px solid var(--lrnr-border-soft);
   border-radius: var(--lrnr-radius-card);
   background: var(--lrnr-surface-muted);
@@ -1229,19 +1228,23 @@ button:disabled,
 
 .lesson-diagram-flow {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: center;
   gap: var(--lrnr-space-3);
   list-style: none;
 }
 
 .lesson-diagram-step {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: var(--lrnr-space-3);
-  min-width: max-content;
 }
 
 .lesson-diagram-node {
+  display: flex;
+  align-items: center;
+  text-align: center;
   border: 1px solid var(--lrnr-border-strong);
   border-radius: var(--lrnr-radius-control);
   background: var(--lrnr-surface-raised);
@@ -1250,6 +1253,8 @@ button:disabled,
 }
 
 .lesson-diagram-arrow {
+  display: flex;
+  align-items: center;
   color: var(--lrnr-accent);
   font-size: 1.35rem;
   font-weight: 800;
@@ -1434,5 +1439,43 @@ button:disabled,
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+}
+
+/* — navigation feedback: top progress bar + per-route enter transition — */
+.nav-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 0;
+  background: var(--lrnr-accent, #ec3013);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--lrnr-accent, #ec3013) 60%, transparent);
+  border-radius: 0 3px 3px 0;
+  z-index: 2000;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    width 200ms ease,
+    opacity 280ms ease;
+}
+
+.nav-progress[data-active='true'] {
+  opacity: 1;
+}
+
+.route-transition {
+  animation: route-enter 320ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes route-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

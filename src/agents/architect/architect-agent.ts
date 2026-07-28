@@ -157,16 +157,62 @@ function toSlug(value: string): string {
   );
 }
 
+/**
+ * Strips learner framing ("I want to master…", "how to…") off a raw goal so the
+ * deterministic fallback can talk about the actual subject. This is a heuristic,
+ * not understanding — the LLM blueprint is what produces a real concept map; this
+ * only keeps the offline/fallback plan topic-shaped instead of literally
+ * "mental model / core workflow".
+ */
+function deriveTopicLabel(goal: string): string {
+  const cleaned = goal
+    .toLowerCase()
+    .replace(
+      /\b(i\s+(?:want|would like|wanna|need|wish)\s+to|i'?m\s+trying\s+to|please|help\s+me|teach\s+me|how\s+to|the\s+basics\s+of|get(?:ting)?\s+good\s+at|become\s+(?:a|an)?|learn(?:ing)?|master(?:ing)?|understand(?:ing)?|study(?:ing)?|about)\b/g,
+      ' ',
+    )
+    .replace(/[^a-z0-9+#.\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return cleaned.length > 0 ? cleaned : 'this topic';
+}
+
+/**
+ * A goal-shaped fallback concept outline. Ordered fundamentals → internals →
+ * practice → pitfalls → tradeoffs, so an offline plan at least sequences real
+ * learning stages for the actual subject.
+ */
+function goalShapedConcepts(topic: string): string[] {
+  return [
+    `${topic} fundamentals`,
+    `how ${topic} works under the hood`,
+    `${topic} in practice`,
+    `common ${topic} mistakes`,
+    `${topic} tradeoffs and scaling`,
+  ];
+}
+
 function findTopicProfile(goal: string) {
-  return (
-    topicProfiles.find((profile) => profile.match.test(goal)) ?? {
-      title: toSentenceCase(goal).slice(0, 255),
-      prerequisites: ['core vocabulary', 'working examples', 'practice routine'],
-      concepts: ['mental model', 'core workflow', 'common mistakes', 'practice plan'],
-      probeQuestion:
-        'Walk me through how you currently think this topic works. Where does the process feel clear, and where does it still feel fuzzy?',
-    }
-  );
+  const matched = topicProfiles.find((profile) => profile.match.test(goal));
+
+  if (matched !== undefined) {
+    return matched;
+  }
+
+  const topic = deriveTopicLabel(goal);
+
+  return {
+    title: toSentenceCase(topic).slice(0, 255),
+    prerequisites: [
+      `${topic} core vocabulary`,
+      'foundational examples',
+      'a small hands-on practice routine',
+    ],
+    concepts: goalShapedConcepts(topic),
+    probeQuestion:
+      'Walk me through how you currently think this topic works. Where does the process feel clear, and where does it still feel fuzzy?',
+  };
 }
 
 /** The deterministic interview: a fixed, kind-ordered question sequence. */

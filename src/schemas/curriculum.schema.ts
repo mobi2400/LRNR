@@ -46,6 +46,14 @@ export const layer1RoadmapSchema = z.object({
   milestones: z.array(z.string().trim().min(1).max(255)).min(1),
   requiredDepth: z.string().trim().min(1).max(255),
   generatedBy: z.literal('curriculum_builder_initial_node'),
+  /**
+   * How the sessions were designed: 'model' means the LLM grounded them in the
+   * researched concept map; 'fallback' means every model path was skipped or
+   * failed and the deterministic scaffold produced them. null = legacy record
+   * predating this field. The UI surfaces 'fallback' so a generic offline plan
+   * is never mistaken for a grounded one.
+   */
+  grounding: z.enum(['model', 'fallback']).nullable().default(null),
 });
 
 export const curriculumMapResponseSchema = z.object({

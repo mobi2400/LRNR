@@ -395,9 +395,11 @@ export async function buildInitialCurriculumPlan(
     conceptSeeds.length > 0 ? conceptSeeds : fallbackConceptSeeds(topicBrief);
   const resolved = resolveGenerator(generate);
   let sessions: CurriculumSession[];
+  let grounding: 'model' | 'fallback';
 
   if (resolved === null) {
     sessions = buildSessions(usableConcepts, topicBrief, profile);
+    grounding = 'fallback';
   } else {
     try {
       sessions = await designSessionsWithModel(
@@ -407,12 +409,14 @@ export async function buildInitialCurriculumPlan(
         profile,
         resolved,
       );
+      grounding = 'model';
     } catch (error) {
       appLogger.warn('curriculum_builder.design_fallback', {
         topicSlug: topicBrief.topicSlug,
         error: error instanceof Error ? error.message : 'unknown',
       });
       sessions = buildSessions(usableConcepts, topicBrief, profile);
+      grounding = 'fallback';
     }
   }
 
@@ -429,6 +433,7 @@ export async function buildInitialCurriculumPlan(
     milestones: usableConcepts.map((concept) => concept.title),
     requiredDepth: topicBrief.requiredDepth,
     generatedBy: 'curriculum_builder_initial_node',
+    grounding,
   });
 
   return {

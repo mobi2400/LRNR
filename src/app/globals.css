@@ -1217,7 +1217,6 @@ button:disabled,
 }
 
 .lesson-diagram {
-  overflow-x: auto;
   border: 1px solid var(--lrnr-border-soft);
   border-radius: var(--lrnr-radius-card);
   background: var(--lrnr-surface-muted);
@@ -1229,19 +1228,23 @@ button:disabled,
 
 .lesson-diagram-flow {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: center;
   gap: var(--lrnr-space-3);
   list-style: none;
 }
 
 .lesson-diagram-step {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: var(--lrnr-space-3);
-  min-width: max-content;
 }
 
 .lesson-diagram-node {
+  display: flex;
+  align-items: center;
+  text-align: center;
   border: 1px solid var(--lrnr-border-strong);
   border-radius: var(--lrnr-radius-control);
   background: var(--lrnr-surface-raised);
@@ -1250,6 +1253,8 @@ button:disabled,
 }
 
 .lesson-diagram-arrow {
+  display: flex;
+  align-items: center;
   color: var(--lrnr-accent);
   font-size: 1.35rem;
   font-weight: 800;

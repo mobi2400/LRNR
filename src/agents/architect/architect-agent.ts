@@ -352,22 +352,74 @@ const firstQuestionSchema = z.object({
   kind: lenientQuestionKindSchema,
 });
 
+/**
+ * The model is asked for a depth enum but sometimes returns a phrase
+ * ("intermediate-to-advanced", "medium"). Rejecting the turn over the label
+ * discarded a whole grounded blueprint, so an unrecognized depth degrades to
+ * 'intermediate' instead of failing.
+ */
+const lenientDepthSchema = z.unknown().transform((value): PreferredDepth => {
+  const parsed = preferredDepthSchema.safeParse(
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  );
+
+  return parsed.success ? parsed.data : 'intermediate';
+});
+
+/** Pulls a usable label out of a string, or an object the model wrapped it in. */
+function readLabel(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>;
+
+    for (const key of ['title', 'name', 'concept', 'slug', 'label', 'value', 'text']) {
+      const candidate = record[key];
+
+      if (typeof candidate === 'string' && candidate.trim().length > 0) {
+        return candidate.trim();
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Concept and prerequisite lists are meant to be strings, but the model often
+ * returns arrays of objects ({ "concept": "..." }). Coerce each item to its
+ * label rather than failing the whole parse.
+ */
+const lenientStringList = z
+  .array(z.unknown())
+  .transform((values) =>
+    values.map(readLabel).filter((item): item is string => item !== null),
+  );
+
 const turnDecisionSchema = z.object({
-  inferredBackground: z.array(z.string().trim().min(1)).default([]),
-  strengths: z.array(z.string().trim().min(1)).default([]),
-  weakAreas: z.array(z.string().trim().min(1)).default([]),
-  misconceptions: z.array(z.string().trim().min(1)).default([]),
-  tags: z.array(z.string().trim().min(1)).default([]),
+  inferredBackground: lenientStringList.default([]),
+  strengths: lenientStringList.default([]),
+  weakAreas: lenientStringList.default([]),
+  misconceptions: lenientStringList.default([]),
+  tags: lenientStringList.default([]),
   complete: z.boolean(),
-  nextQuestion: firstQuestionSchema.nullable().default(null),
+  nextQuestion: firstQuestionSchema.nullable().catch(null).default(null),
+  // A malformed blueprint must not sink the turn — signals and completion still
+  // apply, and the dedicated blueprint pass (or the goal-shaped fallback) fills
+  // in a usable roadmap.
   blueprint: z
     .object({
       title: z.string().trim().min(1),
-      requiredDepth: preferredDepthSchema,
-      prerequisiteMap: z.array(z.string().trim().min(1)).default([]),
-      conceptOutline: z.array(z.string().trim().min(1)).default([]),
+      requiredDepth: lenientDepthSchema,
+      prerequisiteMap: lenientStringList.default([]),
+      conceptOutline: lenientStringList.default([]),
     })
     .nullable()
+    .catch(null)
     .default(null),
   motivation: z.string().trim().min(1).nullable().default(null),
   priorAttempts: z.string().trim().min(1).nullable().default(null),
@@ -421,10 +473,13 @@ Ask the single best opening discovery question. Return { "question": "...", "kin
 
 const blueprintSchema = z.object({
   title: z.string().trim().min(1),
-  requiredDepth: preferredDepthSchema,
-  prerequisiteMap: z.array(z.string().trim().min(1)).min(1),
-  conceptOutline: z.array(z.string().trim().min(1)).min(3),
-  recommendedSources: z.array(z.string().trim().min(1)).default([]),
+  requiredDepth: lenientDepthSchema,
+  // Same object-vs-string tolerance as the turn schema, but this dedicated pass
+  // still requires enough grounded material to be worth using; too little falls
+  // back to the goal-shaped deterministic blueprint.
+  prerequisiteMap: lenientStringList.pipe(z.array(z.string().min(1)).min(1)),
+  conceptOutline: lenientStringList.pipe(z.array(z.string().min(1)).min(3)),
+  recommendedSources: lenientStringList.default([]),
 });
 
 /**

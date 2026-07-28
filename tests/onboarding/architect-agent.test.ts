@@ -127,6 +127,64 @@ describe('architect onboarding agent', () => {
     );
   });
 
+  it('tolerates a malformed blueprint (objects, invalid depth) instead of dropping the turn', async () => {
+    // The mock runs the real schema, exactly as generateStructured does in
+    // production, so the leniency is what is under test.
+    const generate = vi
+      .fn()
+      // Opening question.
+      .mockImplementationOnce((input: { schema: { parse: (v: unknown) => unknown } }) =>
+        input.schema.parse({ question: 'How do you think Kafka scales?', kind: 'probe' }),
+      )
+      // Completing turn whose blueprint is the exact shape that broke production:
+      // an out-of-enum depth and object-wrapped list items.
+      .mockImplementationOnce((input: { schema: { parse: (v: unknown) => unknown } }) =>
+        input.schema.parse({
+          strengths: [{ label: 'Built backend APIs' }],
+          weakAreas: ['rebalancing'],
+          complete: true,
+          nextQuestion: null,
+          blueprint: {
+            title: 'Kafka for Backend Systems',
+            requiredDepth: 'intermediate-to-advanced',
+            prerequisiteMap: [{ concept: 'distributed systems' }, 'networking'],
+            conceptOutline: [
+              { title: 'consumer groups' },
+              { name: 'offset commits' },
+              { concept: 'exactly-once semantics' },
+            ],
+          },
+          motivation: null,
+          priorAttempts: null,
+          dailyConstraint: null,
+        }),
+      );
+
+    const state = await createInitialOnboardingState(
+      { goal: 'master apache kafka for backend systems', preferredDepth: 'intermediate' },
+      generate as unknown as ArchitectGenerator,
+    );
+
+    const progress = await applyOnboardingAnswer(
+      state,
+      'Producers append to partitioned topics; consumers read by offset.',
+      generate as unknown as ArchitectGenerator,
+    );
+
+    expect(progress.completed).toBe(true);
+    const blueprint = progress.state.topicBlueprint;
+    // Object-wrapped list items were coerced to their labels, not dropped.
+    expect(blueprint?.conceptOutline).toContain('consumer groups');
+    expect(blueprint?.conceptOutline).toContain('exactly-once semantics');
+    expect(blueprint?.prerequisiteMap).toContain('distributed systems');
+    // The unrecognized depth degraded to a valid enum value.
+    expect(['beginner', 'intermediate', 'advanced', 'expert']).toContain(
+      blueprint?.requiredDepth,
+    );
+    // Object-wrapped signal item was coerced too.
+    expect(progress.state.detectedStrengths).toContain('Built backend APIs');
+  });
+
   it('requests a blueprint explicitly when the turn completes without one', async () => {
     const generate = vi
       .fn()
